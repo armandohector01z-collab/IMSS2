@@ -73,19 +73,18 @@ app.get("/api/units/:id_unidad/specialties", async (req, res) => {
 
 // Get Available Slots
 app.get("/api/available-slots", async (req, res) => {
-  const { id_unidad, especialidad, fecha } = req.query;
-  if (!id_unidad || !especialidad || !fecha) {
+  const { id_unidad, fecha } = req.query;
+  if (!id_unidad || !fecha) {
     return res.status(400).json({ success: false, message: "Missing required parameters" });
   }
 
   try {
     const pool = await getDbConnection();
     
-    // 1. Get all consultorios for this specialty in this unit
+    // 1. Get all consultorios in this unit
     const consultoriosResult = await pool.request()
       .input('id_unidad', sql.VarChar, id_unidad)
-      .input('especialidad', sql.VarChar, especialidad)
-      .query('SELECT id_consultorio FROM Consultorio WHERE TRIM(CAST(id_unidad AS VARCHAR)) = TRIM(@id_unidad) AND TRIM(CAST(especialidad AS VARCHAR)) = TRIM(@especialidad)');
+      .query('SELECT id_consultorio FROM Consultorio WHERE TRIM(CAST(id_unidad AS VARCHAR)) = TRIM(@id_unidad)');
     
     const consultorioIds = consultoriosResult.recordset.map(c => {
        const key = Object.keys(c).find(k => k.toLowerCase() === 'id_consultorio');
@@ -210,28 +209,26 @@ app.get("/api/patient/:nss/dashboard", async (req, res) => {
   try {
     const pool = await getDbConnection();
     
-    // Next Appointment
+    // Upcoming Appointments
     const appointmentsResult = await pool.request()
       .input('nss', sql.Int, parseInt(nss))
       .query(`
-        SELECT TOP 1 c.*, u.Nombre as UnidadNombre, cons.especialidad 
+        SELECT c.*, u.Nombre as UnidadNombre, cons.especialidad 
         FROM Cita c
         JOIN UnidadMedica u ON c.id_unidad = u.id_unidad
-        JOIN Consultorio cons ON c.id_consultorio = cons.id_consultorio
+        LEFT JOIN Consultorio cons ON c.id_consultorio = cons.id_consultorio
         WHERE c.NSS = @nss AND c.fecha_hora >= GETDATE()
         ORDER BY c.fecha_hora ASC
       `);
 
-    // Normalized next appointment
-    const nextAppointment = appointmentsResult.recordset[0] ? (() => {
+    const upcomingAppointments = appointmentsResult.recordset.map(apt => {
       const obj: any = {};
-      Object.keys(appointmentsResult.recordset[0]).forEach(key => {
-        obj[key.toLowerCase()] = appointmentsResult.recordset[0][key];
+      Object.keys(apt).forEach(key => {
+        obj[key.toLowerCase()] = apt[key];
       });
-      // specific mapping for names used in frontend
-      obj.UnidadNombre = appointmentsResult.recordset[0].UnidadNombre;
+      obj.unidadnombre = apt.UnidadNombre;
       return obj;
-    })() : null;
+    });
 
     // Recent Prescriptions
     const prescriptionsResult = await pool.request()
@@ -274,7 +271,7 @@ app.get("/api/patient/:nss/dashboard", async (req, res) => {
     })() : null;
 
     res.json({
-      nextAppointment,
+      upcomingAppointments,
       prescriptions,
       assignedUnit
     });

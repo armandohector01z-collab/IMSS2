@@ -280,22 +280,22 @@ const PatientDashboard = () => {
                 </div>
                 <div>
                    <p className="text-sm font-bold text-slate-900">
-                     {data.nextAppointment ? new Date(data.nextAppointment.fecha_hora).toLocaleDateString([], { month: 'long', day: 'numeric' }) : "Sin citas"}
+                     {data.upcomingAppointments?.[0] ? new Date(data.upcomingAppointments[0].fecha_hora).toLocaleDateString([], { month: 'long', day: 'numeric' }) : "Sin citas"}
                    </p>
                    <p className="text-xs text-slate-400 font-medium">
-                     {data.nextAppointment ? new Date(data.nextAppointment.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Ver calendario"}
+                     {data.upcomingAppointments?.[0] ? new Date(data.upcomingAppointments[0].fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Ver calendario"}
                    </p>
                 </div>
             </div>
-            {data.nextAppointment ? (
+            {data.upcomingAppointments?.[0] ? (
                 <div className="mt-4 pt-4 border-t border-slate-50 space-y-3">
                     <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Especialidad</p>
-                        <p className="text-sm font-bold text-slate-800">{data.nextAppointment.especialidad}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Motivo</p>
+                        <p className="text-sm font-bold text-slate-800 line-clamp-2">{data.upcomingAppointments[0].motivo || "General"}</p>
                     </div>
                     <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Unidad</p>
-                    <p className="text-sm font-bold text-slate-800">{data.nextAppointment.unidadnombre}</p>
+                    <p className="text-sm font-bold text-slate-800">{data.upcomingAppointments[0].unidadnombre}</p>
                     </div>
                     <button className="w-full mt-4 py-2 bg-[#1b5e20] text-white text-[10px] font-bold rounded-lg uppercase tracking-widest hover:bg-green-800 transition-all">Ver Detalles</button>
                 </div>
@@ -375,9 +375,8 @@ const ScheduleAppointment = () => {
   const context = React.useContext(AppContext);
   const [units, setUnits] = React.useState<any[]>([]);
   const [selectedUnit, setSelectedUnit] = React.useState<any>(null);
-  const [specialties, setSpecialties] = React.useState<string[]>([]);
-  const [selectedSpecialty, setSelectedSpecialty] = React.useState<string>("");
   const [selectedDate, setSelectedDate] = React.useState<string>("");
+  const [motivo, setMotivo] = React.useState("");
   const [availableSlots, setAvailableSlots] = React.useState<any[]>([]);
   const [selectedSlot, setSelectedSlot] = React.useState<any>(null);
   const [step, setStep] = React.useState(1);
@@ -394,26 +393,8 @@ const ScheduleAppointment = () => {
   }, []);
 
   React.useEffect(() => {
-    if (selectedUnit && selectedUnit.id_unidad) {
-      fetch(`/api/units/${selectedUnit.id_unidad}/specialties`)
-        .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) setSpecialties(data);
-          else {
-            console.error("Specialties is not an array:", data);
-            setSpecialties([]);
-          }
-        })
-        .catch(err => {
-          console.error("Error fetching specialties:", err);
-          setSpecialties([]);
-        });
-    }
-  }, [selectedUnit]);
-
-  React.useEffect(() => {
-    if (selectedUnit && selectedUnit.id_unidad && selectedSpecialty && selectedDate) {
-      fetch(`/api/available-slots?id_unidad=${selectedUnit.id_unidad}&especialidad=${selectedSpecialty}&fecha=${selectedDate}`)
+    if (selectedUnit && selectedUnit.id_unidad && selectedDate) {
+      fetch(`/api/available-slots?id_unidad=${selectedUnit.id_unidad}&fecha=${selectedDate}`)
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setAvailableSlots(data);
@@ -427,7 +408,7 @@ const ScheduleAppointment = () => {
           setAvailableSlots([]);
         });
     }
-  }, [selectedUnit, selectedSpecialty, selectedDate]);
+  }, [selectedUnit, selectedDate]);
 
   const handleNext = () => {
     if (step === 3 && selectedSlot) {
@@ -449,7 +430,7 @@ const ScheduleAppointment = () => {
           id_consultorio: selectedSlot.id_consultorio,
           nss: context?.state.user?.nss,
           id_unidad: selectedUnit.id_unidad,
-          motivo: 'Consulta general agendada desde portal digital'
+          motivo: motivo || 'Consulta general agendada desde portal digital'
         })
       });
       const data = await res.json();
@@ -482,12 +463,12 @@ const ScheduleAppointment = () => {
             <div className="h-px flex-1 mx-4 bg-slate-100"></div>
             <div className="flex items-center gap-2">
               <span className={cn("w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs uppercase transition-all", step >= 2 ? "bg-[#1b5e20] text-white" : "bg-slate-100 text-slate-400")}>2</span>
-              <span className={cn("text-[10px] font-bold uppercase tracking-widest hidden sm:inline", step >= 2 ? "text-[#1b5e20]" : "text-slate-400")}>Especialidad</span>
+              <span className={cn("text-[10px] font-bold uppercase tracking-widest hidden sm:inline", step >= 2 ? "text-[#1b5e20]" : "text-slate-400")}>Fecha y Motivo</span>
             </div>
             <div className="h-px flex-1 mx-4 bg-slate-100"></div>
             <div className="flex items-center gap-2">
               <span className={cn("w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs uppercase transition-all", step >= 3 ? "bg-[#1b5e20] text-white" : "bg-slate-100 text-slate-400")}>3</span>
-              <span className={cn("text-[10px] font-bold uppercase tracking-widest hidden sm:inline", step >= 3 ? "text-[#1b5e20]" : "text-slate-400")}>Fecha</span>
+              <span className={cn("text-[10px] font-bold uppercase tracking-widest hidden sm:inline", step >= 3 ? "text-[#1b5e20]" : "text-slate-400")}>Horario</span>
             </div>
           </div>
 
@@ -515,22 +496,8 @@ const ScheduleAppointment = () => {
 
           {step === 2 && (
             <section className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
-              <h2 className="text-xl font-bold text-slate-900 mb-6 tracking-tight">Elija la Especialidad y Fecha</h2>
+              <h2 className="text-xl font-bold text-slate-900 mb-6 tracking-tight">Elija su Fecha y Motivo</h2>
               <div className="space-y-6">
-                 <div>
-                    <label className="block text-[10px] font-bold text-[#1b5e20] uppercase tracking-widest mb-3">Especialidad Requerida</label>
-                    <select 
-                      value={selectedSpecialty}
-                      onChange={(e) => setSelectedSpecialty(e.target.value)}
-                      className="w-full h-14 px-4 border-none bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-green-100 font-bold text-sm text-slate-700"
-                    >
-                        <option value="">Seleccione una especialidad...</option>
-                        {Array.isArray(specialties) && specialties.map(spec => (
-                          <option key={spec} value={spec}>{spec}</option>
-                        ))}
-                    </select>
-                 </div>
-                 
                  <div>
                     <label className="block text-[10px] font-bold text-[#1b5e20] uppercase tracking-widest mb-3">Fecha de Consulta (Lunes a Viernes)</label>
                     <input 
@@ -540,6 +507,15 @@ const ScheduleAppointment = () => {
                       onChange={(e) => setSelectedDate(e.target.value)}
                       className="w-full h-14 px-6 border-none bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-green-100 font-bold text-sm text-slate-700"
                     />
+                 </div>
+                 <div>
+                    <label className="block text-[10px] font-bold text-[#1b5e20] uppercase tracking-widest mb-3">Motivo de la Cita</label>
+                    <textarea 
+                      value={motivo}
+                      onChange={(e) => setMotivo(e.target.value)}
+                      placeholder="Describa brevemente el síntoma o razón de su visita..."
+                      className="w-full bg-slate-50 border-none rounded-2xl p-6 min-h-[120px] focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                    ></textarea>
                  </div>
               </div>
             </section>
@@ -567,11 +543,11 @@ const ScheduleAppointment = () => {
                 </div>
               ) : (
                 <div className="p-12 text-center bg-slate-50 rounded-2xl">
-                   {(!selectedSpecialty || !selectedDate) 
-                     ? <p className="text-slate-400 text-xs italic">Complete el paso anterior para ver horarios.</p>
+                   {!selectedDate
+                     ? <p className="text-slate-400 text-xs italic">Elija una fecha en el paso anterior.</p>
                      : <div className="space-y-2">
                         <p className="text-slate-900 font-bold text-sm">No hay horarios disponibles.</p>
-                        <p className="text-slate-400 text-[10px] uppercase">Intente con otra fecha o especialidad.</p>
+                        <p className="text-slate-400 text-[10px] uppercase">Intente con otra fecha.</p>
                        </div>
                    }
                 </div>
@@ -590,7 +566,7 @@ const ScheduleAppointment = () => {
               onClick={handleNext}
               disabled={
                 (step === 1 && !selectedUnit) || 
-                (step === 2 && (!selectedSpecialty || !selectedDate)) ||
+                (step === 2 && (!selectedDate || !motivo)) ||
                 (step === 3 && !selectedSlot) ||
                 submitting
               }
@@ -621,8 +597,8 @@ const ScheduleAppointment = () => {
                      {selectedUnit && <span className="text-[#1b5e20] bg-green-50 p-1 rounded-lg"><PlusCircle className="w-4 h-4" /></span>}
                   </div>
                   <div>
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Especialidad</p>
-                     <p className="text-sm font-bold text-slate-900">{selectedSpecialty || "Pendiente"}</p>
+                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Motivo</p>
+                     <p className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{motivo || "Pendiente"}</p>
                   </div>
                   <div>
                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Fecha y Hora</p>
