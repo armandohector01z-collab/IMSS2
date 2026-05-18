@@ -48,19 +48,22 @@ app.get("/api/health", (req, res) => {
 // Get Specialties for a specific unit
 app.get("/api/units/:id_unidad/specialties", async (req, res) => {
   const { id_unidad } = req.params;
-  const unitId = parseInt(id_unidad);
-  if (isNaN(unitId)) return res.status(400).json({ success: false, message: "Invalid unit ID" });
-
   try {
     const pool = await getDbConnection();
+    // Use VarChar for id_unidad to handle possible string IDs and be more flexible
+    // Also include specialties from Medico just in case Consultorio is missing some
     const result = await pool.request()
-      .input('id_unidad', sql.Int, unitId)
-      .query('SELECT DISTINCT especialidad FROM Consultorio WHERE id_unidad = @id_unidad');
+      .input('id_unidad', sql.VarChar, id_unidad)
+      .query(`
+        SELECT DISTINCT especialidad FROM Consultorio WHERE TRIM(CAST(id_unidad AS VARCHAR)) = TRIM(@id_unidad)
+        UNION
+        SELECT DISTINCT especialidad FROM Medico WHERE TRIM(CAST(id_unidad AS VARCHAR)) = TRIM(@id_unidad)
+      `);
     
     const specialties = result.recordset.map(r => {
        const key = Object.keys(r).find(k => k.toLowerCase() === 'especialidad');
        return key ? r[key] : null;
-    }).filter(s => s !== null);
+    }).filter(s => s !== null && s !== '');
 
     res.json(specialties);
   } catch (err) {
@@ -71,8 +74,7 @@ app.get("/api/units/:id_unidad/specialties", async (req, res) => {
 // Get Available Slots
 app.get("/api/available-slots", async (req, res) => {
   const { id_unidad, especialidad, fecha } = req.query;
-  const unitId = parseInt(id_unidad as string);
-  if (isNaN(unitId) || !especialidad || !fecha) {
+  if (!id_unidad || !especialidad || !fecha) {
     return res.status(400).json({ success: false, message: "Missing required parameters" });
   }
 
@@ -81,9 +83,9 @@ app.get("/api/available-slots", async (req, res) => {
     
     // 1. Get all consultorios for this specialty in this unit
     const consultoriosResult = await pool.request()
-      .input('id_unidad', sql.Int, unitId)
+      .input('id_unidad', sql.VarChar, id_unidad)
       .input('especialidad', sql.VarChar, especialidad)
-      .query('SELECT id_consultorio FROM Consultorio WHERE id_unidad = @id_unidad AND especialidad = @especialidad');
+      .query('SELECT id_consultorio FROM Consultorio WHERE TRIM(CAST(id_unidad AS VARCHAR)) = TRIM(@id_unidad) AND TRIM(CAST(especialidad AS VARCHAR)) = TRIM(@especialidad)');
     
     const consultorioIds = consultoriosResult.recordset.map(c => {
        const key = Object.keys(c).find(k => k.toLowerCase() === 'id_consultorio');
@@ -104,7 +106,7 @@ app.get("/api/available-slots", async (req, res) => {
       .query(`
         SELECT fecha_hora, id_consultorio 
         FROM Cita 
-        WHERE id_consultorio IN (${consultorioIds.join(',')})
+        WHERE id_consultorio IN (${consultorioIds.map(id => `'${id}'`).join(',')})
         AND fecha_hora BETWEEN @dateStart AND @dateEnd
       `);
 
@@ -353,7 +355,7 @@ app.post("/api/appointments", async (req, res) => {
       .input('fecha_hora', sql.DateTime2, new Date(fecha_hora))
       .input('id_consultorio', sql.Int, id_consultorio)
       .input('NSS', sql.Int, nss)
-      .input('id_unidad', sql.Int, id_unidad)
+      .input('id_unidad', sql.VarChar, id_unidad)
       .input('motivo', sql.VarChar(50), motivo)
       .query('INSERT INTO Cita (fecha_hora, id_consultorio, NSS, id_unidad, motivo) VALUES (@fecha_hora, @id_consultorio, @NSS, @id_unidad, @motivo)');
     res.json({ success: true });
