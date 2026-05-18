@@ -136,6 +136,7 @@ const LoginPage = () => {
   const context = React.useContext(AppContext);
   const [loading, setLoading] = React.useState(false);
   const [identifier, setIdentifier] = React.useState('');
+  const [password, setPassword] = React.useState('');
   const [role, setRole] = React.useState<'patient' | 'doctor'>('patient');
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -145,7 +146,7 @@ const LoginPage = () => {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, role }),
+        body: JSON.stringify({ identifier, password, role }),
       });
       const data = await response.json();
       if (data.success) {
@@ -211,8 +212,11 @@ const LoginPage = () => {
               </div>
               <input 
                 type="password" 
-                defaultValue="password123"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
                 className="w-full px-4 py-4 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                required
               />
             </div>
             <button 
@@ -248,13 +252,15 @@ const RegisterPage = () => {
   const [units, setUnits] = React.useState<any[]>([]);
   const [formData, setFormData] = React.useState({
     nss: '',
+    curp: '',
+    fecha_nacimiento: '',
     primer_nombre: '',
+    segundo_nombre: '',
     primer_apellido: '',
     segundo_apellido: '',
-    fecha_nacimiento: '',
-    sexo: 'M',
     calle: '',
     colonia: '',
+    numero: '',
     cp: '',
     id_unidad: ''
   });
@@ -301,25 +307,52 @@ const RegisterPage = () => {
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-[600px]"
+        className="w-full max-w-[700px]"
       >
         <div className="bg-white border border-slate-200 p-10 rounded-3xl shadow-sm">
           <div className="mb-10 text-center">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">Crear Cuenta Nueva</h1>
-            <p className="text-sm text-slate-400">Ingresa tus datos oficiales tal como aparecen en tu identificación.</p>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">Expediente Electrónico</h1>
+            <p className="text-sm text-slate-400">Completa tus datos oficiales para tu registro en el sistema IMS.</p>
           </div>
 
           <form onSubmit={handleRegister} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">NSS</label>
+                <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">Número de Seguridad Social (NSS)</label>
                 <input 
                   type="text" 
                   name="nss"
                   value={formData.nss}
                   onChange={handleChange}
-                  placeholder="Número de Seg. Social"
+                  placeholder="Ej. 1234567890"
                   className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">CURP</label>
+                <input 
+                  type="text" 
+                  name="curp"
+                  value={formData.curp}
+                  onChange={handleChange}
+                  placeholder="18 caracteres"
+                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium uppercase"
+                  maxLength={18}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">Fecha de Nacimiento</label>
+                <input 
+                  type="date" 
+                  name="fecha_nacimiento"
+                  value={formData.fecha_nacimiento}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-bold"
                   required
                 />
               </div>
@@ -342,16 +375,26 @@ const RegisterPage = () => {
 
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">Nombre Completo</label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input 
                   type="text" 
                   name="primer_nombre"
                   value={formData.primer_nombre}
                   onChange={handleChange}
-                  placeholder="Nombre(s)"
+                  placeholder="Primer Nombre"
                   className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
                   required
                 />
+                <input 
+                  type="text" 
+                  name="segundo_nombre"
+                  value={formData.segundo_nombre}
+                  onChange={handleChange}
+                  placeholder="Segundo Nombre (Opcional)"
+                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input 
                   type="text" 
                   name="primer_apellido"
@@ -372,42 +415,35 @@ const RegisterPage = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">Fecha de Nacimiento</label>
-                <input 
-                  type="date" 
-                  name="fecha_nacimiento"
-                  value={formData.fecha_nacimiento}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-bold"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">Sexo</label>
-                <select 
-                  name="sexo"
-                  value={formData.sexo}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-bold"
-                  required
-                >
-                  <option value="M">Masculino</option>
-                  <option value="F">Femenino</option>
-                </select>
-              </div>
-            </div>
-
             <div className="space-y-2">
-               <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">Domicilio</label>
+               <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">Dirección</label>
                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <input 
                   type="text" 
                   name="calle"
                   value={formData.calle}
                   onChange={handleChange}
-                  placeholder="Calle y Número"
+                  placeholder="Calle"
+                  className="md:col-span-2 w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                  required
+                />
+                <input 
+                  type="text" 
+                  name="numero"
+                  value={formData.numero}
+                  onChange={handleChange}
+                  placeholder="Núm. Exterior"
+                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input 
+                  type="text" 
+                  name="colonia"
+                  value={formData.colonia}
+                  onChange={handleChange}
+                  placeholder="Colonia"
                   className="md:col-span-2 w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
                   required
                 />
@@ -418,18 +454,10 @@ const RegisterPage = () => {
                   onChange={handleChange}
                   placeholder="C.P."
                   className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                  maxLength={5}
                   required
                 />
               </div>
-              <input 
-                type="text" 
-                name="colonia"
-                value={formData.colonia}
-                onChange={handleChange}
-                placeholder="Colonia"
-                className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
-                required
-              />
             </div>
 
             <div className="pt-4 flex flex-col gap-4">
@@ -936,6 +964,13 @@ const DoctorConsultation = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPatient || submitting) return;
+    
+    // Validate we have at least one medicine
+    if (prescribedMedicines.length === 0) {
+      alert("Debe añadir al menos un medicamento.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch('/api/doctor/prescribe', {
@@ -944,9 +979,9 @@ const DoctorConsultation = () => {
         body: JSON.stringify({
           nss: selectedPatient.nss,
           matricula: context?.state.user?.matricula,
-          id_consultorio: searchedPatient ? null : selectedPatient.id_consultorio,
-          fecha_hora: searchedPatient ? null : selectedPatient.fecha_hora,
-          diagnosis,
+          // If it was searched, we use a default consultorio if not available (ideally this comes from doctor's profile)
+          id_consultorio: selectedPatient.id_consultorio || 1, 
+          fecha_hora: selectedPatient.fecha_hora || new Date().toISOString(),
           medicines: prescribedMedicines.map(m => ({
             id_medicamento: m.id_medicamento,
             dosis: m.dosis || '1 tableta',
@@ -957,7 +992,7 @@ const DoctorConsultation = () => {
       });
       const data = await res.json();
       if (data.success) {
-        alert("Receta generada y asignada al NSS correctamente.");
+        alert("Consulta y Receta registradas exitosamente.");
         if (searchedPatient) {
           setSearchedPatient(null);
           setNssSearch("");
@@ -967,9 +1002,12 @@ const DoctorConsultation = () => {
         setDiagnosis("");
         setPrescribedMedicines([]);
         fetchAppointments();
+      } else {
+        alert("Error: " + data.message);
       }
     } catch (err) {
       console.error(err);
+      alert("Error al procesar la receta.");
     } finally {
       setSubmitting(false);
     }

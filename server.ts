@@ -126,13 +126,15 @@ app.post("/api/auth/login", async (req, res) => {
 app.post("/api/auth/register", async (req, res) => {
   const { 
     nss, 
+    curp,
+    fecha_nacimiento,
     primer_nombre, 
+    segundo_nombre,
     primer_apellido, 
     segundo_apellido, 
-    fecha_nacimiento, 
-    sexo, 
     calle, 
     colonia, 
+    numero,
     cp, 
     id_unidad 
   } = req.body;
@@ -140,29 +142,32 @@ app.post("/api/auth/register", async (req, res) => {
   try {
     const pool = await getDbConnection();
     
-    // Check if NSS already exists
+    // Check if NSS or CURP already exists
     const checkUser = await pool.request()
       .input('nss', sql.Int, parseInt(nss))
-      .query('SELECT NSS FROM Paciente WHERE NSS = @nss');
+      .input('curp', sql.Char(18), curp)
+      .query('SELECT NSS FROM Paciente WHERE NSS = @nss OR CURP = @curp');
     
     if (checkUser.recordset.length > 0) {
-      return res.status(400).json({ success: false, message: "El NSS ya está registrado." });
+      return res.status(400).json({ success: false, message: "El NSS o CURP ya está registrado." });
     }
 
     await pool.request()
       .input('nss', sql.Int, parseInt(nss))
-      .input('p_nom', sql.VarChar(50), primer_nombre)
-      .input('p_ape', sql.VarChar(50), primer_apellido)
-      .input('s_ape', sql.VarChar(50), segundo_apellido || '')
+      .input('curp', sql.Char(18), curp)
       .input('fecha', sql.Date, new Date(fecha_nacimiento))
-      .input('sexo', sql.Char(1), sexo)
-      .input('calle', sql.VarChar(100), calle)
-      .input('colonia', sql.VarChar(100), colonia)
-      .input('cp', sql.Int, parseInt(cp))
+      .input('p_nom', sql.VarChar(30), primer_nombre)
+      .input('s_nom', sql.VarChar(30), segundo_nombre || null)
+      .input('p_ape', sql.VarChar(30), primer_apellido)
+      .input('s_ape', sql.VarChar(30), segundo_apellido || null)
+      .input('calle', sql.VarChar(30), calle)
+      .input('colonia', sql.VarChar(30), colonia)
+      .input('num', sql.VarChar(30), numero)
+      .input('cp', sql.Char(5), cp)
       .input('id_u', sql.Int, parseInt(id_unidad))
       .query(`
-        INSERT INTO Paciente (NSS, Primer_Nombre, Primer_Apellido, Segundo_Apellido, Fecha_Nacimiento, Sexo, Calle, Colonia, CP, id_unidad)
-        VALUES (@nss, @p_nom, @p_ape, @s_ape, @fecha, @sexo, @calle, @colonia, @cp, @id_u)
+        INSERT INTO Paciente (NSS, CURP, fecha_nacimiento, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, calle, colonia, numero, cp, id_unidad)
+        VALUES (@nss, @curp, @fecha, @p_nom, @s_nom, @p_ape, @s_ape, @calle, @colonia, @num, @cp, @id_u)
       `);
 
     res.json({ success: true, message: "Registro exitoso" });
@@ -219,34 +224,18 @@ app.get("/api/patient/:nss/dashboard", async (req, res) => {
       return obj;
     });
 
-    // Recent Prescriptions - Robust query that works even if NSS is in Cita or directly in Receta
-    // We try to find recipes linked via Cita/Consulta OR direct NSS link if column exists
+    // Recent Prescriptions - Linked via the Consulta table as per new schema
     const prescriptionsResult = await pool.request()
       .input('nss', sql.Int, parseInt(nss))
       .query(`
-        SELECT DISTINCT m.nombre, t.dosis, t.frecuencia, t.duracion, r.fecha, r.id_receta
+        SELECT m.nombre, t.dosis, t.frecuencia, t.duracion, r.fecha, co.id_consulta
         FROM Receta r
         JOIN Tiene t ON r.id_receta = t.id_receta
         JOIN Medicamento m ON t.id_medicamento = m.id_medicamento
-        LEFT JOIN Consulta co ON r.id_receta = co.id_receta
-        LEFT JOIN Cita ci ON (ci.id_consultorio = co.id_consultorio AND ci.fecha_hora = co.fecha_hora)
-        WHERE ci.NSS = @nss OR (EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Receta') AND name = 'NSS') AND EXISTS (SELECT 1 FROM Receta WHERE id_receta = r.id_receta AND NSS = @nss))
+        JOIN Consulta co ON r.id_receta = co.id_receta
+        WHERE co.NSS = @nss
         ORDER BY r.fecha DESC
-      `).catch(async () => {
-        // Fallback if the complex EXISTS check fails or if we want simplified logic
-        return await pool.request()
-          .input('nss', sql.Int, parseInt(nss))
-          .query(`
-            SELECT m.nombre, t.dosis, t.frecuencia, t.duracion, r.fecha
-            FROM Receta r
-            JOIN Tiene t ON r.id_receta = t.id_receta
-            JOIN Medicamento m ON t.id_medicamento = m.id_medicamento
-            JOIN Consulta co ON r.id_receta = co.id_receta
-            JOIN Cita ci ON (ci.id_consultorio = co.id_consultorio AND ci.fecha_hora = co.fecha_hora)
-            WHERE ci.NSS = @nss
-            ORDER BY r.fecha DESC
-          `);
-      });
+      `);
 
     const prescriptions = prescriptionsResult.recordset.map((r: any) => {
       const obj: any = {};
@@ -323,7 +312,7 @@ app.get("/api/patient/search/:nss", async (req, res) => {
 
 // Create Prescription and Consultation
 app.post("/api/doctor/prescribe", async (req, res) => {
-  const { nss, matricula, id_consultorio, fecha_hora, diagnosis, medicines } = req.body;
+  const { nss, matricula, id_consultorio, fecha_hora, medicines } = req.body;
   
   try {
     const pool = await getDbConnection();
@@ -331,12 +320,10 @@ app.post("/api/doctor/prescribe", async (req, res) => {
     await transaction.begin();
 
     try {
-      // 1. Create Receta (Assigning NSS directly if column exists, otherwise we rely on Consulta)
-      // I'll try to insert NSS into Receta if the user wants "assigned to NSS"
+      // Generate ID for Receta (Assuming identity, if not we'd need to fetch MAX)
       const recetaResult = await transaction.request()
         .input('fecha', sql.DateTime2, new Date())
-        .input('nss', sql.Int, parseInt(nss))
-        .query('INSERT INTO Receta (fecha, NSS) OUTPUT INSERTED.id_receta VALUES (@fecha, @nss)');
+        .query('INSERT INTO Receta (fecha) OUTPUT INSERTED.id_receta VALUES (@fecha)');
       
       const id_receta = recetaResult.recordset[0].id_receta;
 
@@ -348,18 +335,20 @@ app.post("/api/doctor/prescribe", async (req, res) => {
           .input('dosis', sql.VarChar(50), med.dosis)
           .input('frecuencia', sql.VarChar(50), med.frecuencia)
           .input('duracion', sql.VarChar(50), med.duracion || '7 días')
-          .query('INSERT INTO Tiene (id_receta, id_medicamento, dosis, frecuencia, duracion) VALUES (@id_receta, @id_med, @dosis, @frecuencia, @duracion)');
+          .query('INSERT INTO Tiene (id_medicamento, id_receta, frecuencia, duracion, dosis) VALUES (@id_med, @id_receta, @frecuencia, @duracion, @dosis)');
       }
 
-      // 3. Create Consulta linked to Cita and Receta (Only if appointment info is present)
-      if (id_consultorio && fecha_hora) {
-        await transaction.request()
-          .input('id_consultorio', sql.Int, id_consultorio)
-          .input('fecha_hora', sql.DateTime2, new Date(fecha_hora))
-          .input('id_receta', sql.Int, id_receta)
-          .input('matricula', sql.Int, matricula)
-          .query('INSERT INTO Consulta (id_consultorio, fecha_hora, id_receta, Matricula) VALUES (@id_consultorio, @fecha_hora, @id_receta, @matricula)');
-      }
+      // 3. Create Consulta (Linking Patient, Recipe, Cabinet, and Doctor)
+      await transaction.request()
+        .input('nss', sql.Int, parseInt(nss))
+        .input('id_receta', sql.Int, id_receta)
+        .input('id_consultorio', sql.Int, id_consultorio)
+        .input('matricula', sql.Int, matricula)
+        .input('fecha_hora', sql.DateTime2, fecha_hora ? new Date(fecha_hora) : new Date())
+        .query(`
+          INSERT INTO Consulta (NSS, id_receta, id_consultorio, Matricula, fecha_hora) 
+          VALUES (@nss, @id_receta, @id_consultorio, @matricula, @fecha_hora)
+        `);
 
       await transaction.commit();
       res.json({ success: true, id_receta });
