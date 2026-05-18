@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  /* Colors - Clean Minimalism */
+  --color-primary: #1b5e20;
+  --color-primary-container: #1b5e20;
+  --color-on-primary-container: #ffffff;
+  --color-secondary-container: #f0f7f0;
+  --color-on-secondary-container: #1b5e20;
+  --color-imss-burgundy: #1b5e20;
+  --color-surface-container-low: #ffffff;
+  --color-surface-container: #f8fafc;
+  --color-surface-container-high: #f1f5f9;
+  --color-surface-container-highest: #e2e8f0;
+  --color-outline-variant: #e2e8f0;
+  --color-on-surface-variant: #64748b;
+  --color-status-scheduled: #1b5e20;
+  --color-status-completed: #1b5e20;
+  --color-status-cancelled: #ef4444;
+
+  /* Typography */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* Spacing & Mixins */
+  --radius-xl: 1rem;
+  --radius-2xl: 1rem;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans;
+  }
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}

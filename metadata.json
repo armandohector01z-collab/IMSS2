@@ -1,0 +1,6 @@
+{
+  "name": "IMSS Digital",
+  "description": "Sistema de gestión de citas y consultas médicas del IMSS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
