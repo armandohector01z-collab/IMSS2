@@ -411,7 +411,13 @@ const ScheduleAppointment = () => {
   const context = React.useContext(AppContext);
   const [units, setUnits] = React.useState<any[]>([]);
   const [selectedUnit, setSelectedUnit] = React.useState<any>(null);
+  const [specialties, setSpecialties] = React.useState<string[]>([]);
+  const [selectedSpecialty, setSelectedSpecialty] = React.useState<string>("");
+  const [selectedDate, setSelectedDate] = React.useState<string>("");
+  const [availableSlots, setAvailableSlots] = React.useState<any[]>([]);
+  const [selectedSlot, setSelectedSlot] = React.useState<any>(null);
   const [step, setStep] = React.useState(1);
+  const [submitting, setSubmitting] = React.useState(false);
 
   React.useEffect(() => {
     fetch('/api/units')
@@ -419,7 +425,55 @@ const ScheduleAppointment = () => {
       .then(setUnits);
   }, []);
 
-  const handleNext = () => setStep(prev => Math.min(prev + 1, 3));
+  React.useEffect(() => {
+    if (selectedUnit) {
+      fetch(`/api/units/${selectedUnit.id_unidad}/specialties`)
+        .then(res => res.json())
+        .then(setSpecialties);
+    }
+  }, [selectedUnit]);
+
+  React.useEffect(() => {
+    if (selectedUnit && selectedSpecialty && selectedDate) {
+      fetch(`/api/available-slots?id_unidad=${selectedUnit.id_unidad}&especialidad=${selectedSpecialty}&fecha=${selectedDate}`)
+        .then(res => res.json())
+        .then(setAvailableSlots);
+    }
+  }, [selectedUnit, selectedSpecialty, selectedDate]);
+
+  const handleNext = () => {
+    if (step === 3 && selectedSlot) {
+      handleConfirm();
+    } else {
+      setStep(prev => Math.min(prev + 1, 3));
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!selectedSlot || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fecha_hora: selectedSlot.time,
+          id_consultorio: selectedSlot.id_consultorio,
+          NSS: context?.state.user?.NSS,
+          id_unidad: selectedUnit.id_unidad,
+          motivo: 'Consulta general agendada desde portal digital'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        context?.dispatch({ type: 'SET_PAGE', payload: 'dashboard' });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -472,16 +526,67 @@ const ScheduleAppointment = () => {
 
           {step === 2 && (
             <section className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
-              <h2 className="text-xl font-bold text-slate-900 mb-6 tracking-tight">Elija la Especialidad o Consultorio</h2>
-              <div className="space-y-4">
-                 <label className="block text-[10px] font-bold text-[#1b5e20] uppercase tracking-widest">Especialidad Requerida</label>
-                 <select className="w-full h-14 px-4 border-none bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-green-100 font-medium text-sm">
-                    <option>Seleccione una opción...</option>
-                    <option>Pediatría</option>
-                    <option>Ginecología</option>
-                    <option>Medicina Interna</option>
-                 </select>
+              <h2 className="text-xl font-bold text-slate-900 mb-6 tracking-tight">Elija la Especialidad y Fecha</h2>
+              <div className="space-y-6">
+                 <div>
+                    <label className="block text-[10px] font-bold text-[#1b5e20] uppercase tracking-widest mb-3">Especialidad Requerida</label>
+                    <select 
+                      value={selectedSpecialty}
+                      onChange={(e) => setSelectedSpecialty(e.target.value)}
+                      className="w-full h-14 px-4 border-none bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-green-100 font-bold text-sm text-slate-700"
+                    >
+                        <option value="">Seleccione una especialidad...</option>
+                        {specialties.map(spec => (
+                          <option key={spec} value={spec}>{spec}</option>
+                        ))}
+                    </select>
+                 </div>
+                 
+                 <div>
+                    <label className="block text-[10px] font-bold text-[#1b5e20] uppercase tracking-widest mb-3">Fecha de Consulta (Lunes a Viernes)</label>
+                    <input 
+                      type="date"
+                      value={selectedDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="w-full h-14 px-6 border-none bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-green-100 font-bold text-sm text-slate-700"
+                    />
+                 </div>
               </div>
+            </section>
+          )}
+
+          {step === 3 && (
+            <section className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+              <h2 className="text-xl font-bold text-slate-900 mb-6 tracking-tight">Seleccione su Horario</h2>
+              {availableSlots.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {availableSlots.map((slot, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedSlot(slot)}
+                      className={cn(
+                        "py-3 rounded-xl font-bold text-xs transition-all border-2",
+                        selectedSlot?.time === slot.time 
+                          ? "bg-[#1b5e20] text-white border-[#1b5e20]" 
+                          : "bg-white text-slate-600 border-slate-100 hover:border-green-200"
+                      )}
+                    >
+                      {new Date(slot.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-12 text-center bg-slate-50 rounded-2xl">
+                   {(!selectedSpecialty || !selectedDate) 
+                     ? <p className="text-slate-400 text-xs italic">Complete el paso anterior para ver horarios.</p>
+                     : <div className="space-y-2">
+                        <p className="text-slate-900 font-bold text-sm">No hay horarios disponibles.</p>
+                        <p className="text-slate-400 text-[10px] uppercase">Intente con otra fecha o especialidad.</p>
+                       </div>
+                   }
+                </div>
+              )}
             </section>
           )}
 
@@ -494,10 +599,15 @@ const ScheduleAppointment = () => {
              </button>
              <button 
               onClick={handleNext}
-              disabled={step === 1 && !selectedUnit}
+              disabled={
+                (step === 1 && !selectedUnit) || 
+                (step === 2 && (!selectedSpecialty || !selectedDate)) ||
+                (step === 3 && !selectedSlot) ||
+                submitting
+              }
               className="px-8 py-3 bg-[#1b5e20] text-white font-bold uppercase text-[10px] tracking-widest rounded-xl shadow-sm hover:bg-green-800 disabled:opacity-50 transition-all"
              >
-                {step === 3 ? 'Confirmar Cita' : 'Siguiente Paso'}
+                {step === 3 ? (submitting ? 'Reservando...' : 'Confirmar Cita') : 'Siguiente Paso'}
              </button>
           </div>
         </div>
@@ -523,11 +633,16 @@ const ScheduleAppointment = () => {
                   </div>
                   <div>
                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Especialidad</p>
-                     <p className="text-sm font-bold text-slate-900">Pendiente</p>
+                     <p className="text-sm font-bold text-slate-900">{selectedSpecialty || "Pendiente"}</p>
                   </div>
                   <div>
                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Fecha y Hora</p>
-                     <p className="text-sm font-bold text-slate-900">No seleccionado</p>
+                     <p className="text-sm font-bold text-slate-900">
+                        {selectedSlot 
+                          ? `${new Date(selectedSlot.time).toLocaleDateString()} ${new Date(selectedSlot.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` 
+                          : (selectedDate ? `${selectedDate} (Elegir hora)` : "No seleccionado")
+                        }
+                     </p>
                   </div>
                </div>
                <div className="mt-4 p-4 bg-slate-50 rounded-2xl flex gap-3 items-center">

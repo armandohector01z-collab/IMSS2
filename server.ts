@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
@@ -43,6 +43,83 @@ app.get("/api/health", (req, res) => {
     environment: process.env.NODE_ENV,
     database: cleanServer.includes("azure") ? "azure-sql" : "unknown"
   });
+});
+
+// Get Specialties for a specific unit
+app.get("/api/units/:id_unidad/specialties", async (req, res) => {
+  const { id_unidad } = req.params;
+  try {
+    const pool = await getDbConnection();
+    const result = await pool.request()
+      .input('id_unidad', sql.Int, parseInt(id_unidad))
+      .query('SELECT DISTINCT especialidad FROM Consultorio WHERE id_unidad = @id_unidad');
+    res.json(result.recordset.map(r => r.especialidad));
+  } catch (err) {
+    res.status(500).json({ success: false, message: (err as Error).message });
+  }
+});
+
+// Get Available Slots
+app.get("/api/available-slots", async (req, res) => {
+  const { id_unidad, especialidad, fecha } = req.query;
+  try {
+    const pool = await getDbConnection();
+    
+    // 1. Get all consultorios for this specialty in this unit
+    const consultoriosResult = await pool.request()
+      .input('id_unidad', sql.Int, parseInt(id_unidad as string))
+      .input('especialidad', sql.VarChar, especialidad)
+      .query('SELECT id_consultorio FROM Consultorio WHERE id_unidad = @id_unidad AND especialidad = @especialidad');
+    
+    const consultorioIds = consultoriosResult.recordset.map(c => c.id_consultorio);
+    if (consultorioIds.length === 0) return res.json([]);
+
+    // 2. Get existing appointments for these consultorios on this date
+    const dateStart = new Date(fecha as string);
+    dateStart.setHours(0,0,0,0);
+    const dateEnd = new Date(fecha as string);
+    dateEnd.setHours(23,59,59,999);
+
+    const appointmentsResult = await pool.request()
+      .input('dateStart', sql.DateTime2, dateStart)
+      .input('dateEnd', sql.DateTime2, dateEnd)
+      .query(`
+        SELECT fecha_hora, id_consultorio 
+        FROM Cita 
+        WHERE id_consultorio IN (${consultorioIds.join(',')})
+        AND fecha_hora BETWEEN @dateStart AND @dateEnd
+      `);
+
+    // 3. Generate theoretical slots (8:00 AM to 4:00 PM, every 30 mins)
+    const availableSlots = [];
+    const workStart = 8; // 8 AM
+    const workEnd = 16;  // 4 PM
+
+    for (let hour = workStart; hour < workEnd; hour++) {
+      for (let min of [0, 30]) {
+        const slotTime = new Date(fecha as string);
+        slotTime.setHours(hour, min, 0, 0);
+        
+        // Find which consultorios are free at this exact time
+        const busyConsultorios = appointmentsResult.recordset
+          .filter(a => new Date(a.fecha_hora).getTime() === slotTime.getTime())
+          .map(a => a.id_consultorio);
+        
+        const freeConsultorio = consultorioIds.find(id => !busyConsultorios.includes(id));
+        
+        if (freeConsultorio) {
+          availableSlots.push({
+            time: slotTime.toISOString(),
+            id_consultorio: freeConsultorio
+          });
+        }
+      }
+    }
+
+    res.json(availableSlots);
+  } catch (err) {
+    res.status(500).json({ success: false, message: (err as Error).message });
+  }
 });
 
 // Mock Auth for testing (In a real app, this would be more secure)
