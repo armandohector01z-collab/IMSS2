@@ -880,7 +880,6 @@ const ScheduleAppointment = () => {
 
 // Doctor Consultation Page (The one from the image)
 const DoctorConsultation = () => {
-  const [appointments, setAppointments] = React.useState<any[]>([]);
   const [diagnosis, setDiagnosis] = React.useState("");
   const [prescribedMedicines, setPrescribedMedicines] = React.useState<any[]>([]);
   const [idReceta, setIdReceta] = React.useState(Math.floor(Math.random() * 10000).toString());
@@ -897,20 +896,6 @@ const DoctorConsultation = () => {
   const [searching, setSearching] = React.useState(false);
 
   const context = React.useContext(AppContext);
-
-  const fetchAppointments = () => {
-    const matricula = context?.state.user?.matricula;
-    if (matricula) {
-      fetch(`/api/doctor/${matricula}/appointments`)
-        .then(res => res.json())
-        .then(setAppointments)
-        .catch(err => console.error("Error fetching appointments:", err));
-    }
-  };
-
-  React.useEffect(() => {
-    fetchAppointments();
-  }, [context?.state.user?.matricula]);
 
   React.useEffect(() => {
     if (medQuery.length > 2) {
@@ -942,7 +927,7 @@ const DoctorConsultation = () => {
     }
   };
 
-  const selectedPatient = searchedPatient || appointments[0] || null;
+  const selectedPatient = searchedPatient;
 
   const addMedicine = (med: any) => {
     setPrescribedMedicines([...prescribedMedicines, { 
@@ -998,17 +983,12 @@ const DoctorConsultation = () => {
       const data = await res.json();
       if (data.success) {
         alert("Consulta y Receta registradas exitosamente.");
-        if (searchedPatient) {
-          setSearchedPatient(null);
-          setNssSearch("");
-        } else {
-          setAppointments(appointments.slice(1));
-        }
+        setSearchedPatient(null);
+        setNssSearch("");
         setDiagnosis("");
         setPrescribedMedicines([]);
         setIdReceta(Math.floor(Math.random() * 10000).toString());
         setIdConsulta(Math.floor(Math.random() * 10000).toString());
-        fetchAppointments();
       } else {
         alert("Error: " + data.message);
       }
@@ -1034,8 +1014,8 @@ const DoctorConsultation = () => {
                 type="text" 
                 value={nssSearch}
                 onChange={(e) => setNssSearch(e.target.value)}
-                placeholder="Buscar NSS..."
-                className="w-48 pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-green-100 text-xs font-bold"
+                placeholder="Buscar NSS del Paciente..."
+                className="w-64 pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-green-100 text-xs font-bold"
               />
             </div>
             <button 
@@ -1043,62 +1023,50 @@ const DoctorConsultation = () => {
               disabled={searching}
               className="bg-slate-900 text-white px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center gap-2"
             >
-              {searching ? "..." : "Cargar"}
+              {searching ? "..." : "Cargar Paciente"}
             </button>
         </form>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Column: Agenda */}
         <section className="lg:col-span-4 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
           <div className="p-6 border-b border-slate-50 flex justify-between items-center">
             <h2 className="font-bold text-slate-800">
-              {searchedPatient ? 'Paciente Seleccionado' : 'Agenda Activa'}
+              {searchedPatient ? 'Paciente Seleccionado' : 'Selección de Paciente'}
             </h2>
             {searchedPatient && (
               <button 
                 onClick={() => { setSearchedPatient(null); setNssSearch(""); }}
                 className="text-[10px] font-bold text-[#b71c1c] uppercase tracking-widest hover:underline"
               >
-                Volver a Agenda
+                Limpiar
               </button>
             )}
-            {!searchedPatient && <span className="bg-green-50 text-[#1b5e20] px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Hoy</span>}
           </div>
           <div className="divide-y divide-slate-50">
             {searchedPatient ? (
               <div className="p-6 bg-green-50 border-l-4 border-[#1b5e20]">
                 <div className="flex justify-between items-start mb-2">
-                  <span className="text-[9px] font-bold text-[#1b5e20] uppercase tracking-widest">RESULTADO DE BÚSQUEDA</span>
+                  <span className="text-[9px] font-bold text-[#1b5e20] uppercase tracking-widest">EXPEDIENTE ACTIVO</span>
                 </div>
-                <p className="font-bold text-slate-900">{searchedPatient.primer_nombre} {searchedPatient.primer_apellido}</p>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">NSS: {searchedPatient.nss}</p>
+                <p className="font-bold text-slate-900 text-lg">{searchedPatient.primer_nombre} {searchedPatient.primer_apellido}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mb-4">NSS: {searchedPatient.nss}</p>
+                <div className="grid grid-cols-1 gap-2">
+                   <div className="text-[10px] text-slate-500 font-medium">
+                      <span className="font-bold text-slate-900 uppercase">CURP:</span> {searchedPatient.curp}
+                   </div>
+                   <div className="text-[10px] text-slate-500 font-medium">
+                      <span className="font-bold text-slate-900 uppercase">Unidad:</span> {searchedPatient.id_unidad}
+                   </div>
+                </div>
               </div>
             ) : (
-              appointments.length > 0 ? appointments.map((apt, idx) => (
-                <div 
-                  key={idx} 
-                  className={cn(
-                    "p-6 transition-all",
-                    idx === 0 ? "bg-slate-50 border-l-4 border-[#1b5e20]" : "hover:bg-slate-50 cursor-pointer"
-                  )}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className={cn("text-[9px] font-bold uppercase tracking-widest", idx === 0 ? "text-[#1b5e20]" : "text-slate-400")}>
-                      {new Date(apt.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {idx === 0 ? 'EN CONSULTA' : 'PROGRAMADA'}
-                    </span>
-                  </div>
-                  <p className="font-bold text-slate-900">{apt.primer_nombre} {apt.primer_apellido}</p>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">NSS: {apt.nss}</p>
-                </div>
-              )) : (
-                <div className="p-8 text-center text-slate-300 italic text-sm">No hay citas pendientes.</div>
-              )
+              <div className="p-12 text-center text-slate-300 italic text-sm">
+                <p className="mb-2">No hay paciente seleccionado.</p>
+                <p className="text-[9px] uppercase tracking-widest font-bold">Use el NSS para iniciar</p>
+              </div>
             )}
           </div>
-          <button className="w-full py-4 text-[#1b5e20] font-bold uppercase text-[10px] tracking-widest hover:bg-slate-50 transition-all border-t border-slate-50">
-            Ver Calendario Completo
-          </button>
         </section>
 
         {/* Right Column: Consultation Detail */}
