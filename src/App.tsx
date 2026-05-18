@@ -36,7 +36,7 @@ interface User {
 interface AppState {
   user: User | null;
   role: 'patient' | 'doctor' | null;
-  page: 'dashboard' | 'schedule' | 'consultation' | 'login';
+  page: 'dashboard' | 'schedule' | 'consultation' | 'login' | 'register';
 }
 
 // Current User Context (Simplistic for the demo)
@@ -227,9 +227,227 @@ const LoginPage = () => {
               <span className="flex-shrink mx-4 text-[10px] text-slate-300 font-bold uppercase">O</span>
               <div className="flex-grow border-t border-slate-100"></div>
             </div>
-            <button type="button" className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-slate-50 transition-all">
+            <button 
+              type="button" 
+              onClick={() => context?.dispatch({ type: 'SET_PAGE', payload: 'register' })}
+              className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-slate-50 transition-all font-sans"
+            >
               Crear cuenta nueva
             </button>
+          </form>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+// Register Page
+const RegisterPage = () => {
+  const context = React.useContext(AppContext);
+  const [loading, setLoading] = React.useState(false);
+  const [units, setUnits] = React.useState<any[]>([]);
+  const [formData, setFormData] = React.useState({
+    nss: '',
+    primer_nombre: '',
+    primer_apellido: '',
+    segundo_apellido: '',
+    fecha_nacimiento: '',
+    sexo: 'M',
+    calle: '',
+    colonia: '',
+    cp: '',
+    id_unidad: ''
+  });
+
+  React.useEffect(() => {
+    fetch('/api/units')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setUnits(data);
+      })
+      .catch(err => console.error("Error fetching units:", err));
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert("Registro exitoso. Ahora puedes iniciar sesión.");
+        context?.dispatch({ type: 'SET_PAGE', payload: 'login' });
+      } else {
+        alert(data.message);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error en el registro");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-8 bg-slate-50 py-12">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-[600px]"
+      >
+        <div className="bg-white border border-slate-200 p-10 rounded-3xl shadow-sm">
+          <div className="mb-10 text-center">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">Crear Cuenta Nueva</h1>
+            <p className="text-sm text-slate-400">Ingresa tus datos oficiales tal como aparecen en tu identificación.</p>
+          </div>
+
+          <form onSubmit={handleRegister} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">NSS</label>
+                <input 
+                  type="text" 
+                  name="nss"
+                  value={formData.nss}
+                  onChange={handleChange}
+                  placeholder="Número de Seg. Social"
+                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">Unidad Médica Asignada</label>
+                <select 
+                  name="id_unidad"
+                  value={formData.id_unidad}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-bold"
+                  required
+                >
+                  <option value="">Selecciona Unidad...</option>
+                  {units.map(u => (
+                    <option key={u.id_unidad} value={u.id_unidad}>{u.nombre}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">Nombre Completo</label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input 
+                  type="text" 
+                  name="primer_nombre"
+                  value={formData.primer_nombre}
+                  onChange={handleChange}
+                  placeholder="Nombre(s)"
+                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                  required
+                />
+                <input 
+                  type="text" 
+                  name="primer_apellido"
+                  value={formData.primer_apellido}
+                  onChange={handleChange}
+                  placeholder="Ap. Paterno"
+                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                  required
+                />
+                <input 
+                  type="text" 
+                  name="segundo_apellido"
+                  value={formData.segundo_apellido}
+                  onChange={handleChange}
+                  placeholder="Ap. Materno"
+                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">Fecha de Nacimiento</label>
+                <input 
+                  type="date" 
+                  name="fecha_nacimiento"
+                  value={formData.fecha_nacimiento}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-bold"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">Sexo</label>
+                <select 
+                  name="sexo"
+                  value={formData.sexo}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-bold"
+                  required
+                >
+                  <option value="M">Masculino</option>
+                  <option value="F">Femenino</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+               <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-wider">Domicilio</label>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input 
+                  type="text" 
+                  name="calle"
+                  value={formData.calle}
+                  onChange={handleChange}
+                  placeholder="Calle y Número"
+                  className="md:col-span-2 w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                  required
+                />
+                <input 
+                  type="text" 
+                  name="cp"
+                  value={formData.cp}
+                  onChange={handleChange}
+                  placeholder="C.P."
+                  className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                  required
+                />
+              </div>
+              <input 
+                type="text" 
+                name="colonia"
+                value={formData.colonia}
+                onChange={handleChange}
+                placeholder="Colonia"
+                className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium"
+                required
+              />
+            </div>
+
+            <div className="pt-4 flex flex-col gap-4">
+              <button 
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#1b5e20] text-white py-4 rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-green-800 transition-all flex justify-center items-center shadow-sm"
+              >
+                {loading ? "Registrando..." : "Crear mi Expediente Digital"}
+              </button>
+              <button 
+                type="button"
+                onClick={() => context?.dispatch({ type: 'SET_PAGE', payload: 'login' })}
+                className="w-full text-slate-400 font-bold uppercase text-[10px] tracking-widest hover:text-slate-800 transition-all py-2"
+              >
+                Ya tengo cuenta, iniciar sesión
+              </button>
+            </div>
           </form>
         </div>
       </motion.div>
@@ -626,15 +844,25 @@ const DoctorConsultation = () => {
   const [medResults, setMedResults] = React.useState<any[]>([]);
   const [showMedResults, setShowMedResults] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
+  
+  const [nssSearch, setNssSearch] = React.useState("");
+  const [searchedPatient, setSearchedPatient] = React.useState<any>(null);
+  const [searching, setSearching] = React.useState(false);
+
   const context = React.useContext(AppContext);
 
-  React.useEffect(() => {
+  const fetchAppointments = () => {
     const matricula = context?.state.user?.matricula;
     if (matricula) {
       fetch(`/api/doctor/${matricula}/appointments`)
         .then(res => res.json())
-        .then(setAppointments);
+        .then(setAppointments)
+        .catch(err => console.error("Error fetching appointments:", err));
     }
+  };
+
+  React.useEffect(() => {
+    fetchAppointments();
   }, [context?.state.user?.matricula]);
 
   React.useEffect(() => {
@@ -647,7 +875,27 @@ const DoctorConsultation = () => {
     }
   }, [medQuery]);
 
-  const selectedPatient = appointments[0] || null;
+  const handleNssSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nssSearch) return;
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/patient/search/${nssSearch}`);
+      const data = await res.json();
+      if (data.success) {
+        setSearchedPatient(data.patient);
+      } else {
+        alert("Paciente no encontrado");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error al buscar paciente");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const selectedPatient = searchedPatient || appointments[0] || null;
 
   const addMedicine = (med: any) => {
     setPrescribedMedicines([...prescribedMedicines, { 
@@ -681,8 +929,8 @@ const DoctorConsultation = () => {
         body: JSON.stringify({
           nss: selectedPatient.nss,
           matricula: context?.state.user?.matricula,
-          id_consultorio: selectedPatient.id_consultorio,
-          fecha_hora: selectedPatient.fecha_hora,
+          id_consultorio: searchedPatient ? null : selectedPatient.id_consultorio,
+          fecha_hora: searchedPatient ? null : selectedPatient.fecha_hora,
           diagnosis,
           medicines: prescribedMedicines.map(m => ({
             id_medicamento: m.id_medicamento,
@@ -694,10 +942,16 @@ const DoctorConsultation = () => {
       });
       const data = await res.json();
       if (data.success) {
-        alert("Consulta y receta guardadas correctamente.");
-        setAppointments(appointments.slice(1));
+        alert("Receta generada y asignada al NSS correctamente.");
+        if (searchedPatient) {
+          setSearchedPatient(null);
+          setNssSearch("");
+        } else {
+          setAppointments(appointments.slice(1));
+        }
         setDiagnosis("");
         setPrescribedMedicines([]);
+        fetchAppointments();
       }
     } catch (err) {
       console.error(err);
@@ -708,37 +962,78 @@ const DoctorConsultation = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
-      <header>
-        <h1 className="text-3xl font-bold text-[#1b5e20] tracking-tight">Evaluación Médica</h1>
-        <p className="text-sm text-slate-400 font-medium">Bienvenido, Dr. {context?.state.user?.primer_apellido}. Expediente digital abierto.</p>
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-bold text-[#1b5e20] tracking-tight">Evaluación Médica</h1>
+          <p className="text-sm text-slate-400 font-medium">Bienvenido, Dr. {context?.state.user?.primer_apellido}. Expediente digital abierto.</p>
+        </div>
+        <form onSubmit={handleNssSearch} className="flex gap-2">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+              <input 
+                type="text" 
+                value={nssSearch}
+                onChange={(e) => setNssSearch(e.target.value)}
+                placeholder="Buscar NSS..."
+                className="w-48 pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-green-100 text-xs font-bold"
+              />
+            </div>
+            <button 
+              type="submit"
+              disabled={searching}
+              className="bg-slate-900 text-white px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center gap-2"
+            >
+              {searching ? "..." : "Cargar"}
+            </button>
+        </form>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Agenda */}
         <section className="lg:col-span-4 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
           <div className="p-6 border-b border-slate-50 flex justify-between items-center">
-            <h2 className="font-bold text-slate-800">Agenda Activa</h2>
-            <span className="bg-green-50 text-[#1b5e20] px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Hoy</span>
+            <h2 className="font-bold text-slate-800">
+              {searchedPatient ? 'Paciente Seleccionado' : 'Agenda Activa'}
+            </h2>
+            {searchedPatient && (
+              <button 
+                onClick={() => { setSearchedPatient(null); setNssSearch(""); }}
+                className="text-[10px] font-bold text-[#b71c1c] uppercase tracking-widest hover:underline"
+              >
+                Volver a Agenda
+              </button>
+            )}
+            {!searchedPatient && <span className="bg-green-50 text-[#1b5e20] px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Hoy</span>}
           </div>
           <div className="divide-y divide-slate-50">
-            {appointments.length > 0 ? appointments.map((apt, idx) => (
-              <div 
-                key={idx} 
-                className={cn(
-                  "p-6 transition-all",
-                  idx === 0 ? "bg-slate-50 border-l-4 border-[#1b5e20]" : "hover:bg-slate-50 cursor-pointer"
-                )}
-              >
+            {searchedPatient ? (
+              <div className="p-6 bg-green-50 border-l-4 border-[#1b5e20]">
                 <div className="flex justify-between items-start mb-2">
-                  <span className={cn("text-[9px] font-bold uppercase tracking-widest", idx === 0 ? "text-[#1b5e20]" : "text-slate-400")}>
-                    {new Date(apt.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {idx === 0 ? 'EN CONSULTA' : 'PROGRAMADA'}
-                  </span>
+                  <span className="text-[9px] font-bold text-[#1b5e20] uppercase tracking-widest">RESULTADO DE BÚSQUEDA</span>
                 </div>
-                <p className="font-bold text-slate-900">{apt.primer_nombre} {apt.primer_apellido}</p>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">NSS: {apt.nss}</p>
+                <p className="font-bold text-slate-900">{searchedPatient.primer_nombre} {searchedPatient.primer_apellido}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">NSS: {searchedPatient.nss}</p>
               </div>
-            )) : (
-              <div className="p-8 text-center text-slate-300 italic text-sm">No hay citas pendientes.</div>
+            ) : (
+              appointments.length > 0 ? appointments.map((apt, idx) => (
+                <div 
+                  key={idx} 
+                  className={cn(
+                    "p-6 transition-all",
+                    idx === 0 ? "bg-slate-50 border-l-4 border-[#1b5e20]" : "hover:bg-slate-50 cursor-pointer"
+                  )}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <span className={cn("text-[9px] font-bold uppercase tracking-widest", idx === 0 ? "text-[#1b5e20]" : "text-slate-400")}>
+                      {new Date(apt.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {idx === 0 ? 'EN CONSULTA' : 'PROGRAMADA'}
+                    </span>
+                  </div>
+                  <p className="font-bold text-slate-900">{apt.primer_nombre} {apt.primer_apellido}</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">NSS: {apt.nss}</p>
+                </div>
+              )) : (
+                <div className="p-8 text-center text-slate-300 italic text-sm">No hay citas pendientes.</div>
+              )
             )}
           </div>
           <button className="w-full py-4 text-[#1b5e20] font-bold uppercase text-[10px] tracking-widest hover:bg-slate-50 transition-all border-t border-slate-50">
@@ -940,7 +1235,10 @@ export default function App() {
   });
 
   const renderPage = () => {
-    if (!state.user) return <LoginPage />;
+    if (!state.user) {
+      if (state.page === 'register') return <RegisterPage />;
+      return <LoginPage />;
+    }
     
     switch (state.page) {
       case 'dashboard':

@@ -122,6 +122,55 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+// Register Patient
+app.post("/api/auth/register", async (req, res) => {
+  const { 
+    nss, 
+    primer_nombre, 
+    primer_apellido, 
+    segundo_apellido, 
+    fecha_nacimiento, 
+    sexo, 
+    calle, 
+    colonia, 
+    cp, 
+    id_unidad 
+  } = req.body;
+
+  try {
+    const pool = await getDbConnection();
+    
+    // Check if NSS already exists
+    const checkUser = await pool.request()
+      .input('nss', sql.Int, parseInt(nss))
+      .query('SELECT NSS FROM Paciente WHERE NSS = @nss');
+    
+    if (checkUser.recordset.length > 0) {
+      return res.status(400).json({ success: false, message: "El NSS ya está registrado." });
+    }
+
+    await pool.request()
+      .input('nss', sql.Int, parseInt(nss))
+      .input('p_nom', sql.VarChar(50), primer_nombre)
+      .input('p_ape', sql.VarChar(50), primer_apellido)
+      .input('s_ape', sql.VarChar(50), segundo_apellido || '')
+      .input('fecha', sql.Date, new Date(fecha_nacimiento))
+      .input('sexo', sql.Char(1), sexo)
+      .input('calle', sql.VarChar(100), calle)
+      .input('colonia', sql.VarChar(100), colonia)
+      .input('cp', sql.Int, parseInt(cp))
+      .input('id_u', sql.Int, parseInt(id_unidad))
+      .query(`
+        INSERT INTO Paciente (NSS, Primer_Nombre, Primer_Apellido, Segundo_Apellido, Fecha_Nacimiento, Sexo, Calle, Colonia, CP, id_unidad)
+        VALUES (@nss, @p_nom, @p_ape, @s_ape, @fecha, @sexo, @calle, @colonia, @cp, @id_u)
+      `);
+
+    res.json({ success: true, message: "Registro exitoso" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: (err as Error).message });
+  }
+});
+
 // Get Units
 app.get("/api/units", async (req, res) => {
   try {
@@ -178,9 +227,7 @@ app.get("/api/patient/:nss/dashboard", async (req, res) => {
         FROM Receta r
         JOIN Tiene t ON r.id_receta = t.id_receta
         JOIN Medicamento m ON t.id_medicamento = m.id_medicamento
-        JOIN Consulta co ON r.id_receta = co.id_receta
-        JOIN Cita ci ON (ci.id_consultorio = co.id_consultorio AND ci.fecha_hora = co.fecha_hora)
-        WHERE ci.NSS = @nss
+        WHERE r.NSS = @nss
         ORDER BY r.fecha DESC
       `);
 
@@ -234,10 +281,32 @@ app.get("/api/medicines", async (req, res) => {
   }
 });
 
+// Get Patient for Doctor Search
+app.get("/api/patient/search/:nss", async (req, res) => {
+  const { nss } = req.params;
+  try {
+    const pool = await getDbConnection();
+    const result = await pool.request()
+      .input('nss', sql.Int, parseInt(nss))
+      .query('SELECT NSS, primer_nombre, primer_apellido, segundo_apellido, fecha_nacimiento, sexo FROM Paciente WHERE NSS = @nss');
+    
+    if (result.recordset.length > 0) {
+      const patient: any = {};
+      Object.keys(result.recordset[0]).forEach(key => {
+        patient[key.toLowerCase()] = result.recordset[0][key];
+      });
+      res.json({ success: true, patient });
+    } else {
+      res.status(404).json({ success: false, message: "Paciente no encontrado" });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: (err as Error).message });
+  }
+});
+
 // Create Prescription and Consultation
 app.post("/api/doctor/prescribe", async (req, res) => {
   const { nss, matricula, id_consultorio, fecha_hora, diagnosis, medicines } = req.body;
-  // medicines: [{id_medicamento, dosis, frecuencia, duracion}]
   
   try {
     const pool = await getDbConnection();
@@ -245,10 +314,12 @@ app.post("/api/doctor/prescribe", async (req, res) => {
     await transaction.begin();
 
     try {
-      // 1. Create Receta
+      // 1. Create Receta (Assigning NSS directly if column exists, otherwise we rely on Consulta)
+      // I'll try to insert NSS into Receta if the user wants "assigned to NSS"
       const recetaResult = await transaction.request()
         .input('fecha', sql.DateTime2, new Date())
-        .query('INSERT INTO Receta (fecha) OUTPUT INSERTED.id_receta VALUES (@fecha)');
+        .input('nss', sql.Int, parseInt(nss))
+        .query('INSERT INTO Receta (fecha, NSS) OUTPUT INSERTED.id_receta VALUES (@fecha, @nss)');
       
       const id_receta = recetaResult.recordset[0].id_receta;
 
@@ -263,14 +334,15 @@ app.post("/api/doctor/prescribe", async (req, res) => {
           .query('INSERT INTO Tiene (id_receta, id_medicamento, dosis, frecuencia, duracion) VALUES (@id_receta, @id_med, @dosis, @frecuencia, @duracion)');
       }
 
-      // 3. Create Consulta linked to Cita and Receta
-      await transaction.request()
-        .input('id_consultorio', sql.Int, id_consultorio)
-        .input('fecha_hora', sql.DateTime2, new Date(fecha_hora))
-        .input('id_receta', sql.Int, id_receta)
-        .input('matricula', sql.Int, matricula)
-        // Add diagnosis if there's a field for it, otherwise we're just linking
-        .query('INSERT INTO Consulta (id_consultorio, fecha_hora, id_receta, Matricula) VALUES (@id_consultorio, @fecha_hora, @id_receta, @matricula)');
+      // 3. Create Consulta linked to Cita and Receta (Only if appointment info is present)
+      if (id_consultorio && fecha_hora) {
+        await transaction.request()
+          .input('id_consultorio', sql.Int, id_consultorio)
+          .input('fecha_hora', sql.DateTime2, new Date(fecha_hora))
+          .input('id_receta', sql.Int, id_receta)
+          .input('matricula', sql.Int, matricula)
+          .query('INSERT INTO Consulta (id_consultorio, fecha_hora, id_receta, Matricula) VALUES (@id_consultorio, @fecha_hora, @id_receta, @matricula)');
+      }
 
       await transaction.commit();
       res.json({ success: true, id_receta });
