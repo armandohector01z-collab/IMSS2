@@ -54,7 +54,6 @@ const Sidebar = () => {
   const items = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
     { id: 'schedule', label: 'Citas', icon: CalendarDays },
-    { id: 'recetas', label: 'Recetas', icon: FileText },
     { id: 'config', label: 'Configuración', icon: Settings },
   ];
 
@@ -119,7 +118,7 @@ const TopBar = () => {
                  {state.user.primer_nombre} {state.user.primer_apellido}
               </p>
               <p className="text-xs text-slate-400">
-                {state.role === 'patient' ? `NSS: ${state.user.NSS}` : `Matrícula: ${state.user.Matricula}`}
+                {state.role === 'patient' ? `NSS: ${state.user.nss}` : `Matrícula: ${state.user.matricula}`}
               </p>
             </div>
             <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600">
@@ -244,13 +243,13 @@ const PatientDashboard = () => {
   const [data, setData] = React.useState<any>(null);
 
   React.useEffect(() => {
-    const nss = context?.state.user?.NSS;
+    const nss = context?.state.user?.nss;
     if (nss) {
       fetch(`/api/patient/${nss}/dashboard`)
         .then(res => res.json())
         .then(setData);
     }
-  }, [context?.state.user?.NSS]);
+  }, [context?.state.user?.nss]);
 
   if (!data) return <div className="p-12 text-center text-[#1b5e20] font-bold uppercase tracking-widest animate-pulse text-xs">Sincronizando Expediente...</div>;
 
@@ -295,8 +294,8 @@ const PatientDashboard = () => {
                         <p className="text-sm font-bold text-slate-800">{data.nextAppointment.especialidad}</p>
                     </div>
                     <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Unidad</p>
-                        <p className="text-sm font-bold text-slate-800">{data.nextAppointment.UnidadNombre}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Unidad</p>
+                    <p className="text-sm font-bold text-slate-800">{data.nextAppointment.unidadnombre}</p>
                     </div>
                     <button className="w-full mt-4 py-2 bg-[#1b5e20] text-white text-[10px] font-bold rounded-lg uppercase tracking-widest hover:bg-green-800 transition-all">Ver Detalles</button>
                 </div>
@@ -306,19 +305,13 @@ const PatientDashboard = () => {
           </div>
           
           <div className="flex-1 flex flex-col gap-6 pl-0 md:pl-8 border-l border-none md:border-slate-50">
-             <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-50 p-4 rounded-xl">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Consultas 2024</p>
-                    <p className="text-xl font-bold text-slate-900">04</p>
-                </div>
-                <div className="bg-slate-50 p-4 rounded-xl">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Recetas Activas</p>
-                    <p className="text-xl font-bold text-slate-900">{(data.prescriptions?.length || 0).toString().padStart(2, '0')}</p>
-                </div>
+             <div className="bg-slate-50 p-4 rounded-xl">
+                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Recetas Activas</p>
+                 <p className="text-xl font-bold text-slate-900">{(data.prescriptions?.length || 0).toString().padStart(2, '0')}</p>
              </div>
              <div className="flex-1 bg-green-50 rounded-2xl p-6 flex flex-col justify-center items-start">
                 <h3 className="text-sm font-bold text-[#1b5e20] mb-2">Unidad Asignada</h3>
-                <p className="text-xl font-bold text-[#1b5e20] uppercase">{data.assignedUnit?.Nombre || "--"}</p>
+                <p className="text-xl font-bold text-[#1b5e20] uppercase">{data.assignedUnit?.nombre || "--"}</p>
                 <p className="text-[11px] text-[#1b5e20]/70 font-medium leading-relaxed mt-2">{data.assignedUnit?.calle}, {data.assignedUnit?.colonia}</p>
              </div>
           </div>
@@ -454,13 +447,14 @@ const ScheduleAppointment = () => {
         body: JSON.stringify({
           fecha_hora: selectedSlot.time,
           id_consultorio: selectedSlot.id_consultorio,
-          NSS: context?.state.user?.NSS,
+          nss: context?.state.user?.nss,
           id_unidad: selectedUnit.id_unidad,
           motivo: 'Consulta general agendada desde portal digital'
         })
       });
       const data = await res.json();
       if (data.success) {
+        alert("Cita agendada correctamente.");
         context?.dispatch({ type: 'SET_PAGE', payload: 'dashboard' });
       }
     } catch (err) {
@@ -511,7 +505,7 @@ const ScheduleAppointment = () => {
                     )}
                   >
                     <span className="text-[10px] font-bold text-green-600 mb-1 uppercase tracking-tighter">{unit.tipo}</span>
-                    <span className="text-lg font-bold text-slate-900">{unit.Nombre}</span>
+                    <span className="text-lg font-bold text-slate-900">{unit.nombre}</span>
                     <span className="text-xs text-slate-400 mt-1 font-medium">{unit.calle}, {unit.colonia}</span>
                   </button>
                 ))}
@@ -616,13 +610,13 @@ const ScheduleAppointment = () => {
                <div className="border-b border-slate-50 pb-6">
                   <p className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-widest mb-1">Derechohabiente</p>
                   <p className="font-bold text-slate-900">{context?.state.user?.primer_nombre} {context?.state.user?.primer_apellido}</p>
-                  <p className="text-xs text-slate-400 font-medium">NSS: {context?.state.user?.NSS}</p>
+                  <p className="text-xs text-slate-400 font-medium">NSS: {context?.state.user?.nss}</p>
                </div>
                <div className="space-y-4">
                   <div className="flex justify-between items-start">
                      <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Unidad</p>
-                        <p className="text-sm font-bold text-slate-900">{selectedUnit?.Nombre || "Pendiente"}</p>
+                        <p className="text-sm font-bold text-slate-900">{selectedUnit?.nombre || "Pendiente"}</p>
                      </div>
                      {selectedUnit && <span className="text-[#1b5e20] bg-green-50 p-1 rounded-lg"><PlusCircle className="w-4 h-4" /></span>}
                   </div>
@@ -664,13 +658,13 @@ const DoctorConsultation = () => {
   const context = React.useContext(AppContext);
 
   React.useEffect(() => {
-    const matricula = context?.state.user?.Matricula;
+    const matricula = context?.state.user?.matricula;
     if (matricula) {
       fetch(`/api/doctor/${matricula}/appointments`)
         .then(res => res.json())
         .then(setAppointments);
     }
-  }, [context?.state.user?.Matricula]);
+  }, [context?.state.user?.matricula]);
 
   React.useEffect(() => {
     if (medQuery.length > 2) {
@@ -714,8 +708,8 @@ const DoctorConsultation = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nss: selectedPatient.NSS,
-          matricula: context?.state.user?.Matricula,
+          nss: selectedPatient.nss,
+          matricula: context?.state.user?.matricula,
           id_consultorio: selectedPatient.id_consultorio,
           fecha_hora: selectedPatient.fecha_hora,
           diagnosis,
@@ -770,7 +764,7 @@ const DoctorConsultation = () => {
                   </span>
                 </div>
                 <p className="font-bold text-slate-900">{apt.primer_nombre} {apt.primer_apellido}</p>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">NSS: {apt.NSS}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">NSS: {apt.nss}</p>
               </div>
             )) : (
               <div className="p-8 text-center text-slate-300 italic text-sm">No hay citas pendientes.</div>
@@ -792,7 +786,7 @@ const DoctorConsultation = () => {
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{selectedPatient.primer_nombre} {selectedPatient.primer_apellido}</h2>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">NSS: {selectedPatient.NSS} • 45 AÑOS • MASCULINO</p>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">NSS: {selectedPatient.nss} • 45 AÑOS • MASCULINO</p>
                   </div>
                 </div>
                 <button className="flex items-center gap-2 bg-[#1b5e20] text-white px-6 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-green-800 transition-all shadow-sm">

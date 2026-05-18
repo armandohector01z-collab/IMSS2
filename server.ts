@@ -57,7 +57,6 @@ app.get("/api/units/:id_unidad/specialties", async (req, res) => {
       .input('id_unidad', sql.Int, unitId)
       .query('SELECT DISTINCT especialidad FROM Consultorio WHERE id_unidad = @id_unidad');
     
-    // Normalize keys to lowercase for mapping
     const specialties = result.recordset.map(r => {
        const key = Object.keys(r).find(k => k.toLowerCase() === 'especialidad');
        return key ? r[key] : null;
@@ -168,7 +167,12 @@ app.post("/api/auth/login", async (req, res) => {
     }
 
     if (result.recordset.length > 0) {
-      res.json({ success: true, user: result.recordset[0], role });
+      // Normalize user object
+      const user: any = {};
+      Object.keys(result.recordset[0]).forEach(key => {
+        user[key.toLowerCase()] = result.recordset[0][key];
+      });
+      res.json({ success: true, user, role });
     } else {
       res.status(401).json({ success: false, message: "User not found" });
     }
@@ -181,9 +185,18 @@ app.post("/api/auth/login", async (req, res) => {
 app.get("/api/units", async (req, res) => {
   try {
     const pool = await getDbConnection();
-    // Use clear column names to ensure consistency
     const result = await pool.request().query('SELECT id_unidad, Nombre, calle, colonia, tipo FROM UnidadMedica');
-    res.json(result.recordset);
+    
+    // Normalize keys to lowercase
+    const normalized = result.recordset.map(r => {
+      const obj: any = {};
+      Object.keys(r).forEach(key => {
+        obj[key.toLowerCase()] = r[key];
+      });
+      return obj;
+    });
+    
+    res.json(normalized);
   } catch (err) {
     res.status(500).json({ success: false, message: (err as Error).message });
   }
@@ -196,7 +209,7 @@ app.get("/api/patient/:nss/dashboard", async (req, res) => {
     const pool = await getDbConnection();
     
     // Next Appointment
-    const appointments = await pool.request()
+    const appointmentsResult = await pool.request()
       .input('nss', sql.Int, parseInt(nss))
       .query(`
         SELECT TOP 1 c.*, u.Nombre as UnidadNombre, cons.especialidad 
@@ -207,16 +220,19 @@ app.get("/api/patient/:nss/dashboard", async (req, res) => {
         ORDER BY c.fecha_hora ASC
       `);
 
-    // Recent Prescriptions (Medicines)
-    // Note: The schema has Tiene (id_medicamento, id_receta) and Receta(id_receta, fecha)
-    // We need to link this to the patient. Cita has NSS. Consulta has id_receta and id_consultorio.
-    // Let's find Consulta by Cita's datetime/consultorio/NSS (approx) or assume Consulta links to Receta.
-    // Actually, Consulta has id_receta. We can find Consultas for a doctor, but for a patient?
-    // Let's look for Consultas where the doctor (Matricula) saw the patient (NSS).
-    // Wait, the schema doesn't have NSS in Consulta. It has id_consultorio and fecha_hora.
-    // Cita has NSS, id_consultorio, fecha_hora. They should match.
-    
-    const prescriptions = await pool.request()
+    // Normalized next appointment
+    const nextAppointment = appointmentsResult.recordset[0] ? (() => {
+      const obj: any = {};
+      Object.keys(appointmentsResult.recordset[0]).forEach(key => {
+        obj[key.toLowerCase()] = appointmentsResult.recordset[0][key];
+      });
+      // specific mapping for names used in frontend
+      obj.UnidadNombre = appointmentsResult.recordset[0].UnidadNombre;
+      return obj;
+    })() : null;
+
+    // Recent Prescriptions
+    const prescriptionsResult = await pool.request()
       .input('nss', sql.Int, parseInt(nss))
       .query(`
         SELECT m.nombre, t.dosis, t.frecuencia, t.duracion, r.fecha
@@ -229,8 +245,16 @@ app.get("/api/patient/:nss/dashboard", async (req, res) => {
         ORDER BY r.fecha DESC
       `);
 
+    const prescriptions = prescriptionsResult.recordset.map(r => {
+      const obj: any = {};
+      Object.keys(r).forEach(key => {
+        obj[key.toLowerCase()] = r[key];
+      });
+      return obj;
+    });
+
     // Assigned Unit
-    const patientUnit = await pool.request()
+    const patientUnitResult = await pool.request()
       .input('nss', sql.Int, parseInt(nss))
       .query(`
         SELECT u.* 
@@ -239,10 +263,18 @@ app.get("/api/patient/:nss/dashboard", async (req, res) => {
         WHERE p.NSS = @nss
       `);
 
+    const assignedUnit = patientUnitResult.recordset[0] ? (() => {
+      const obj: any = {};
+      Object.keys(patientUnitResult.recordset[0]).forEach(key => {
+        obj[key.toLowerCase()] = patientUnitResult.recordset[0][key];
+      });
+      return obj;
+    })() : null;
+
     res.json({
-      nextAppointment: appointments.recordset[0],
-      prescriptions: prescriptions.recordset,
-      assignedUnit: patientUnit.recordset[0]
+      nextAppointment,
+      prescriptions,
+      assignedUnit
     });
   } catch (err) {
     res.status(500).json({ success: false, message: (err as Error).message });
@@ -314,13 +346,13 @@ app.post("/api/doctor/prescribe", async (req, res) => {
 
 // Create Appointment
 app.post("/api/appointments", async (req, res) => {
-  const { fecha_hora, id_consultorio, NSS, id_unidad, motivo } = req.body;
+  const { fecha_hora, id_consultorio, nss, id_unidad, motivo } = req.body;
   try {
     const pool = await getDbConnection();
     await pool.request()
       .input('fecha_hora', sql.DateTime2, new Date(fecha_hora))
       .input('id_consultorio', sql.Int, id_consultorio)
-      .input('NSS', sql.Int, NSS)
+      .input('NSS', sql.Int, nss)
       .input('id_unidad', sql.Int, id_unidad)
       .input('motivo', sql.VarChar(50), motivo)
       .query('INSERT INTO Cita (fecha_hora, id_consultorio, NSS, id_unidad, motivo) VALUES (@fecha_hora, @id_consultorio, @NSS, @id_unidad, @motivo)');
@@ -335,9 +367,6 @@ app.get("/api/doctor/:matricula/appointments", async (req, res) => {
   const { matricula } = req.params;
   try {
     const pool = await getDbConnection();
-    // In this schema, Cita doesn't have Matricula directly.
-    // But Medico has id_unidad. A doctor works at a unit.
-    // For simplicity, let's say a doctor sees appointments in their unit that match their specialty.
     const result = await pool.request()
       .input('matricula', sql.Int, parseInt(matricula))
       .query(`
@@ -349,7 +378,17 @@ app.get("/api/doctor/:matricula/appointments", async (req, res) => {
         WHERE m.Matricula = @matricula
         ORDER BY c.fecha_hora ASC
       `);
-    res.json(result.recordset);
+    
+    // Normalize keys to lowercase
+    const normalized = result.recordset.map(r => {
+      const obj: any = {};
+      Object.keys(r).forEach(key => {
+        obj[key.toLowerCase()] = r[key];
+      });
+      return obj;
+    });
+
+    res.json(normalized);
   } catch (err) {
     res.status(500).json({ success: false, message: (err as Error).message });
   }
