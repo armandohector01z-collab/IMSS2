@@ -883,6 +883,10 @@ const DoctorConsultation = () => {
   const [appointments, setAppointments] = React.useState<any[]>([]);
   const [diagnosis, setDiagnosis] = React.useState("");
   const [prescribedMedicines, setPrescribedMedicines] = React.useState<any[]>([]);
+  const [idReceta, setIdReceta] = React.useState(Math.floor(Math.random() * 10000).toString());
+  const [idConsulta, setIdConsulta] = React.useState(Math.floor(Math.random() * 10000).toString());
+  const [idConsultorio, setIdConsultorio] = React.useState("1");
+  const [fechaHora, setFechaHora] = React.useState(new Date().toISOString().slice(0, 16));
   const [medQuery, setMedQuery] = React.useState("");
   const [medResults, setMedResults] = React.useState<any[]>([]);
   const [showMedResults, setShowMedResults] = React.useState(false);
@@ -979,9 +983,10 @@ const DoctorConsultation = () => {
         body: JSON.stringify({
           nss: selectedPatient.nss,
           matricula: context?.state.user?.matricula,
-          // If it was searched, we use a default consultorio if not available (ideally this comes from doctor's profile)
-          id_consultorio: selectedPatient.id_consultorio || 1, 
-          fecha_hora: selectedPatient.fecha_hora || new Date().toISOString(),
+          id_receta: idReceta,
+          id_consulta: idConsulta,
+          id_consultorio: idConsultorio,
+          fecha_hora: fechaHora,
           medicines: prescribedMedicines.map(m => ({
             id_medicamento: m.id_medicamento,
             dosis: m.dosis || '1 tableta',
@@ -1001,6 +1006,8 @@ const DoctorConsultation = () => {
         }
         setDiagnosis("");
         setPrescribedMedicines([]);
+        setIdReceta(Math.floor(Math.random() * 10000).toString());
+        setIdConsulta(Math.floor(Math.random() * 10000).toString());
         fetchAppointments();
       } else {
         alert("Error: " + data.message);
@@ -1115,20 +1122,40 @@ const DoctorConsultation = () => {
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/50">
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mb-1">Peso</p>
-                  <p className="text-xl font-bold text-slate-900">82 kg</p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mb-1">ID Receta</p>
+                  <input 
+                    type="number"
+                    value={idReceta}
+                    onChange={(e) => setIdReceta(e.target.value)}
+                    className="w-full bg-transparent border-none p-0 outline-none text-sm font-bold text-slate-900" 
+                  />
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/50">
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mb-1">Talla</p>
-                  <p className="text-xl font-bold text-slate-900">1.78 m</p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mb-1">ID Consulta</p>
+                  <input 
+                    type="number"
+                    value={idConsulta}
+                    onChange={(e) => setIdConsulta(e.target.value)}
+                    className="w-full bg-transparent border-none p-0 outline-none text-sm font-bold text-slate-900" 
+                  />
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/50">
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mb-1">Presión</p>
-                  <p className="text-xl font-bold text-slate-900">120/80</p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mb-1">ID Consultorio</p>
+                  <input 
+                    type="number"
+                    value={idConsultorio}
+                    onChange={(e) => setIdConsultorio(e.target.value)}
+                    className="w-full bg-transparent border-none p-0 outline-none text-sm font-bold text-slate-900" 
+                  />
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/50">
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mb-1">Temperatura</p>
-                  <p className="text-xl font-bold text-slate-900">36.5°C</p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mb-1">Fecha y Hora</p>
+                  <input 
+                    type="datetime-local"
+                    value={fechaHora}
+                    onChange={(e) => setFechaHora(e.target.value)}
+                    className="w-full bg-transparent border-none p-0 outline-none text-xs font-bold text-slate-900" 
+                  />
                 </div>
               </div>
 

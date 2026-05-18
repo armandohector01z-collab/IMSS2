@@ -312,7 +312,7 @@ app.get("/api/patient/search/:nss", async (req, res) => {
 
 // Create Prescription and Consultation
 app.post("/api/doctor/prescribe", async (req, res) => {
-  const { nss, matricula, id_consultorio, fecha_hora, medicines } = req.body;
+  const { nss, matricula, id_receta, id_consulta, id_consultorio, fecha_hora, medicines } = req.body;
   
   try {
     const pool = await getDbConnection();
@@ -320,34 +320,34 @@ app.post("/api/doctor/prescribe", async (req, res) => {
     await transaction.begin();
 
     try {
-      // Generate ID for Receta (Assuming identity, if not we'd need to fetch MAX)
-      const recetaResult = await transaction.request()
+      // 1. Create Receta
+      await transaction.request()
+        .input('id_receta', sql.Int, parseInt(id_receta))
         .input('fecha', sql.DateTime2, new Date())
-        .query('INSERT INTO Receta (fecha) OUTPUT INSERTED.id_receta VALUES (@fecha)');
+        .query('INSERT INTO Receta (id_receta, fecha) VALUES (@id_receta, @fecha)');
       
-      const id_receta = recetaResult.recordset[0].id_receta;
-
       // 2. Add Medicines (Tiene)
       for (const med of medicines) {
         await transaction.request()
-          .input('id_receta', sql.Int, id_receta)
+          .input('id_receta', sql.Int, parseInt(id_receta))
           .input('id_med', sql.Int, med.id_medicamento)
-          .input('dosis', sql.VarChar(50), med.dosis)
-          .input('frecuencia', sql.VarChar(50), med.frecuencia)
-          .input('duracion', sql.VarChar(50), med.duracion || '7 días')
+          .input('dosis', sql.VarChar(30), med.dosis)
+          .input('frecuencia', sql.VarChar(30), med.frecuencia)
+          .input('duracion', sql.VarChar(30), med.duracion)
           .query('INSERT INTO Tiene (id_medicamento, id_receta, frecuencia, duracion, dosis) VALUES (@id_med, @id_receta, @frecuencia, @duracion, @dosis)');
       }
 
-      // 3. Create Consulta (Linking Patient, Recipe, Cabinet, and Doctor)
+      // 3. Create Consulta
       await transaction.request()
+        .input('id_consulta', sql.Int, parseInt(id_consulta))
         .input('nss', sql.Int, parseInt(nss))
-        .input('id_receta', sql.Int, id_receta)
-        .input('id_consultorio', sql.Int, id_consultorio)
-        .input('matricula', sql.Int, matricula)
+        .input('id_receta', sql.Int, parseInt(id_receta))
+        .input('id_consultorio', sql.Int, parseInt(id_consultorio))
+        .input('matricula', sql.Int, parseInt(matricula))
         .input('fecha_hora', sql.DateTime2, fecha_hora ? new Date(fecha_hora) : new Date())
         .query(`
-          INSERT INTO Consulta (NSS, id_receta, id_consultorio, Matricula, fecha_hora) 
-          VALUES (@nss, @id_receta, @id_consultorio, @matricula, @fecha_hora)
+          INSERT INTO Consulta (id_consulta, NSS, id_receta, id_consultorio, Matricula, fecha_hora) 
+          VALUES (@id_consulta, @nss, @id_receta, @id_consultorio, @matricula, @fecha_hora)
         `);
 
       await transaction.commit();
