@@ -59,4 +59,4 @@ jobs:
         id: deploy-to-webapp
         with:
           app-name: 'IMSS2' # ASEGÚRATE QUE ESTE SEA EL NOMBRE DE TU APP EN AZURE
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_XXXXX }} # Necesitarás configurar este secreto en GitHub
+          publish-profile: ${{ secrets.APPSERVICE }} # Necesitarás configurar este secreto en GitHub
