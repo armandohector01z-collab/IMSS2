@@ -55,71 +55,37 @@ app.get("/api/available-slots", async (req, res) => {
   try {
     const pool = await getDbConnection();
     
-    // 1. Get all consultorios in this unit
-    const consultoriosResult = await pool.request()
-      .input('id_unidad', sql.VarChar, id_unidad)
-      .query('SELECT id_consultorio FROM Consultorio WHERE TRIM(CAST(id_unidad AS VARCHAR)) = TRIM(@id_unidad)');
-    
-    const consultorioIds = consultoriosResult.recordset.map(c => {
-       const key = Object.keys(c).find(k => k.toLowerCase() === 'id_consultorio');
-       return key ? c[key] : null;
-    }).filter(id => id !== null);
-
-    if (consultorioIds.length === 0) return res.json([]);
-
-    // 2. Get existing appointments for these consultorios on this date
+    // Query Agenda_Horarios for available slots on the specific date and unit
     const dateStart = new Date(fecha as string);
     dateStart.setHours(0,0,0,0);
     const dateEnd = new Date(fecha as string);
     dateEnd.setHours(23,59,59,999);
 
-    const appointmentsResult = await pool.request()
+    const result = await pool.request()
+      .input('id_unidad', sql.Int, parseInt(id_unidad as string))
       .input('dateStart', sql.DateTime2, dateStart)
       .input('dateEnd', sql.DateTime2, dateEnd)
       .query(`
         SELECT fecha_hora, id_consultorio 
-        FROM Cita 
-        WHERE id_consultorio IN (${consultorioIds.map(id => `'${id}'`).join(',')})
+        FROM Agenda_Horarios 
+        WHERE id_unidad = @id_unidad 
+        AND estado = 'Disponible'
         AND fecha_hora BETWEEN @dateStart AND @dateEnd
+        ORDER BY fecha_hora ASC
       `);
 
-    // Normalize keys for appointments
-    const appointments = appointmentsResult.recordset.map(a => {
-       const fhKey = Object.keys(a).find(k => k.toLowerCase() === 'fecha_hora');
-       const icKey = Object.keys(a).find(k => k.toLowerCase() === 'id_consultorio');
-       return {
-         fecha_hora: fhKey ? a[fhKey] : null,
-         id_consultorio: icKey ? a[icKey] : null
-       };
-    }).filter(a => a.fecha_hora && a.id_consultorio);
+    const slots = result.recordset.map(r => {
+      const obj: any = {};
+      Object.keys(r).forEach(key => {
+        obj[key.toLowerCase()] = r[key];
+      });
+      return {
+        time: obj.fecha_hora,
+        id_consultorio: obj.id_consultorio
+      };
+    });
 
-    // 3. Generate theoretical slots (8:00 AM to 4:00 PM, every 30 mins)
-    const availableSlots = [];
-    const workStart = 8; // 8 AM
-    const workEnd = 16;  // 4 PM
-
-    for (let hour = workStart; hour < workEnd; hour++) {
-      for (let min of [0, 30]) {
-        const slotTime = new Date(fecha as string);
-        slotTime.setHours(hour, min, 0, 0);
-        
-        // Find which consultorios are free at this exact time
-        const busyConsultorios = appointments
-          .filter(a => new Date(a.fecha_hora).getTime() === slotTime.getTime())
-          .map(a => a.id_consultorio);
-        
-        const freeConsultorio = consultorioIds.find(id => !busyConsultorios.includes(id));
-        
-        if (freeConsultorio) {
-          availableSlots.push({
-            time: slotTime.toISOString(),
-            id_consultorio: freeConsultorio
-          });
-        }
-      }
-    }
-
-    res.json(availableSlots);
+    res.json(slots);
   } catch (err) {
     res.status(500).json({ success: false, message: (err as Error).message });
   }
@@ -322,14 +288,38 @@ app.post("/api/appointments", async (req, res) => {
   const { fecha_hora, id_consultorio, nss, id_unidad, motivo } = req.body;
   try {
     const pool = await getDbConnection();
-    await pool.request()
-      .input('fecha_hora', sql.DateTime2, new Date(fecha_hora))
-      .input('id_consultorio', sql.Int, id_consultorio)
-      .input('NSS', sql.Int, nss)
-      .input('id_unidad', sql.VarChar, id_unidad)
-      .input('motivo', sql.VarChar(50), motivo)
-      .query('INSERT INTO Cita (fecha_hora, id_consultorio, NSS, id_unidad, motivo) VALUES (@fecha_hora, @id_consultorio, @NSS, @id_unidad, @motivo)');
-    res.json({ success: true });
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      // 1. Insert into Cita
+      await transaction.request()
+        .input('fecha_hora', sql.DateTime2, new Date(fecha_hora))
+        .input('id_consultorio', sql.Int, id_consultorio)
+        .input('NSS', sql.Int, nss)
+        .input('id_unidad', sql.Int, parseInt(id_unidad))
+        .input('motivo', sql.VarChar(50), motivo)
+        .query('INSERT INTO Cita (fecha_hora, id_consultorio, NSS, id_unidad, motivo) VALUES (@fecha_hora, @id_consultorio, @NSS, @id_unidad, @motivo)');
+
+      // 2. Update Agenda_Horarios
+      await transaction.request()
+        .input('fecha_hora', sql.DateTime2, new Date(fecha_hora))
+        .input('id_consultorio', sql.Int, id_consultorio)
+        .input('id_unidad', sql.Int, parseInt(id_unidad))
+        .query(`
+          UPDATE Agenda_Horarios 
+          SET estado = 'Ocupado' 
+          WHERE fecha_hora = @fecha_hora 
+          AND id_consultorio = @id_consultorio 
+          AND id_unidad = @id_unidad
+        `);
+
+      await transaction.commit();
+      res.json({ success: true });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
   } catch (err) {
     res.status(500).json({ success: false, message: (err as Error).message });
   }
