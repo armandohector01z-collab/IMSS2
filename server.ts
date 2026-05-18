@@ -294,7 +294,7 @@ app.get("/api/patient/search/:nss", async (req, res) => {
     const pool = await getDbConnection();
     const result = await pool.request()
       .input('nss', sql.Int, parseInt(nss))
-      .query('SELECT NSS, primer_nombre, primer_apellido, segundo_apellido, fecha_nacimiento, sexo FROM Paciente WHERE NSS = @nss');
+      .query('SELECT NSS, primer_nombre, primer_apellido, segundo_apellido, fecha_nacimiento, CURP, id_unidad FROM Paciente WHERE NSS = @nss');
     
     if (result.recordset.length > 0) {
       const patient: any = {};
@@ -303,10 +303,11 @@ app.get("/api/patient/search/:nss", async (req, res) => {
       });
       res.json({ success: true, patient });
     } else {
-      res.status(404).json({ success: false, message: "Paciente no encontrado" });
+      res.status(404).json({ success: false, message: "Paciente no encontrado en la base de datos." });
     }
   } catch (err) {
-    res.status(500).json({ success: false, message: (err as Error).message });
+    console.error("Search Error:", err);
+    res.status(500).json({ success: false, message: "Error al buscar paciente: " + (err as Error).message });
   }
 });
 
