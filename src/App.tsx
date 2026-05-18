@@ -459,17 +459,46 @@ const RegisterPage = () => {
 const PatientDashboard = () => {
   const context = React.useContext(AppContext);
   const [data, setData] = React.useState<any>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const nss = context?.state.user?.nss;
     if (nss) {
       fetch(`/api/patient/${nss}/dashboard`)
         .then(res => res.json())
-        .then(setData);
+        .then(data => {
+          if (data && data.prescriptions !== undefined) {
+            setData(data);
+          } else {
+            setError(data.message || "Error al cargar datos del expediente.");
+          }
+        })
+        .catch(err => {
+          console.error("Dashboard Fetch Error:", err);
+          setError("No se pudo conectar con el servidor.");
+        });
     }
   }, [context?.state.user?.nss]);
 
+  if (error) {
+    return (
+      <div className="p-12 text-center bg-white rounded-2xl border border-red-100 shadow-sm">
+        <h3 className="text-lg font-bold text-red-900 mb-2">Oops! Algo salió mal</h3>
+        <p className="text-sm text-slate-500 mb-6">{error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="bg-slate-900 text-white px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
   if (!data) return <div className="p-12 text-center text-[#1b5e20] font-bold uppercase tracking-widest animate-pulse text-xs">Sincronizando Expediente...</div>;
+
+  const prescriptions = Array.isArray(data.prescriptions) ? data.prescriptions : [];
+  const upcomingAppointments = Array.isArray(data.upcomingAppointments) ? data.upcomingAppointments : [];
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -498,22 +527,22 @@ const PatientDashboard = () => {
                 </div>
                 <div>
                    <p className="text-sm font-bold text-slate-900">
-                     {data.upcomingAppointments?.[0] ? new Date(data.upcomingAppointments[0].fecha_hora).toLocaleDateString([], { month: 'long', day: 'numeric' }) : "Sin citas"}
+                     {upcomingAppointments[0] ? new Date(upcomingAppointments[0].fecha_hora).toLocaleDateString([], { month: 'long', day: 'numeric' }) : "Sin citas"}
                    </p>
                    <p className="text-xs text-slate-400 font-medium">
-                     {data.upcomingAppointments?.[0] ? new Date(data.upcomingAppointments[0].fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Ver calendario"}
+                     {upcomingAppointments[0] ? new Date(upcomingAppointments[0].fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Ver calendario"}
                    </p>
                 </div>
             </div>
-            {data.upcomingAppointments?.[0] ? (
+            {upcomingAppointments[0] ? (
                 <div className="mt-4 pt-4 border-t border-slate-50 space-y-3">
                     <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Motivo</p>
-                        <p className="text-sm font-bold text-slate-800 line-clamp-2">{data.upcomingAppointments[0].motivo || "General"}</p>
+                        <p className="text-sm font-bold text-slate-800 line-clamp-2">{upcomingAppointments[0].motivo || "General"}</p>
                     </div>
                     <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Unidad</p>
-                    <p className="text-sm font-bold text-slate-800">{data.upcomingAppointments[0].unidadnombre}</p>
+                    <p className="text-sm font-bold text-slate-800">{upcomingAppointments[0].unidadnombre}</p>
                     </div>
                     <button className="w-full mt-4 py-2 bg-[#1b5e20] text-white text-[10px] font-bold rounded-lg uppercase tracking-widest hover:bg-green-800 transition-all">Ver Detalles</button>
                 </div>
@@ -525,7 +554,7 @@ const PatientDashboard = () => {
           <div className="flex-1 flex flex-col gap-6 pl-0 md:pl-8 border-l border-none md:border-slate-50">
              <div className="bg-slate-50 p-4 rounded-xl">
                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Recetas Activas</p>
-                 <p className="text-xl font-bold text-slate-900">{(data.prescriptions?.length || 0).toString().padStart(2, '0')}</p>
+                 <p className="text-xl font-bold text-slate-900">{(prescriptions.length || 0).toString().padStart(2, '0')}</p>
              </div>
              <div className="flex-1 bg-green-50 rounded-2xl p-6 flex flex-col justify-center items-start">
                 <h3 className="text-sm font-bold text-[#1b5e20] mb-2">Unidad Asignada</h3>
@@ -557,7 +586,7 @@ const PatientDashboard = () => {
                     </tr>
                  </thead>
                  <tbody className="text-sm text-slate-600 font-medium divide-y divide-slate-50">
-                    {data.prescriptions.length > 0 ? data.prescriptions.map((p: any, idx: number) => (
+                    {prescriptions.length > 0 ? prescriptions.map((p: any, idx: number) => (
                         <tr key={idx} className="hover:bg-slate-50 transition-colors">
                             <td className="py-6 px-8">
                                 <div>
