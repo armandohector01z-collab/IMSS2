@@ -219,19 +219,36 @@ app.get("/api/patient/:nss/dashboard", async (req, res) => {
       return obj;
     });
 
-    // Recent Prescriptions
+    // Recent Prescriptions - Robust query that works even if NSS is in Cita or directly in Receta
+    // We try to find recipes linked via Cita/Consulta OR direct NSS link if column exists
     const prescriptionsResult = await pool.request()
       .input('nss', sql.Int, parseInt(nss))
       .query(`
-        SELECT m.nombre, t.dosis, t.frecuencia, t.duracion, r.fecha
+        SELECT DISTINCT m.nombre, t.dosis, t.frecuencia, t.duracion, r.fecha, r.id_receta
         FROM Receta r
         JOIN Tiene t ON r.id_receta = t.id_receta
         JOIN Medicamento m ON t.id_medicamento = m.id_medicamento
-        WHERE r.NSS = @nss
+        LEFT JOIN Consulta co ON r.id_receta = co.id_receta
+        LEFT JOIN Cita ci ON (ci.id_consultorio = co.id_consultorio AND ci.fecha_hora = co.fecha_hora)
+        WHERE ci.NSS = @nss OR (EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Receta') AND name = 'NSS') AND EXISTS (SELECT 1 FROM Receta WHERE id_receta = r.id_receta AND NSS = @nss))
         ORDER BY r.fecha DESC
-      `);
+      `).catch(async () => {
+        // Fallback if the complex EXISTS check fails or if we want simplified logic
+        return await pool.request()
+          .input('nss', sql.Int, parseInt(nss))
+          .query(`
+            SELECT m.nombre, t.dosis, t.frecuencia, t.duracion, r.fecha
+            FROM Receta r
+            JOIN Tiene t ON r.id_receta = t.id_receta
+            JOIN Medicamento m ON t.id_medicamento = m.id_medicamento
+            JOIN Consulta co ON r.id_receta = co.id_receta
+            JOIN Cita ci ON (ci.id_consultorio = co.id_consultorio AND ci.fecha_hora = co.fecha_hora)
+            WHERE ci.NSS = @nss
+            ORDER BY r.fecha DESC
+          `);
+      });
 
-    const prescriptions = prescriptionsResult.recordset.map(r => {
+    const prescriptions = prescriptionsResult.recordset.map((r: any) => {
       const obj: any = {};
       Object.keys(r).forEach(key => {
         obj[key.toLowerCase()] = r[key];

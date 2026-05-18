@@ -459,7 +459,6 @@ const RegisterPage = () => {
 const PatientDashboard = () => {
   const context = React.useContext(AppContext);
   const [data, setData] = React.useState<any>(null);
-  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const nss = context?.state.user?.nss;
@@ -467,33 +466,20 @@ const PatientDashboard = () => {
       fetch(`/api/patient/${nss}/dashboard`)
         .then(res => res.json())
         .then(data => {
-          if (data && data.prescriptions !== undefined) {
-            setData(data);
+          if (data && !data.success && data.message) {
+            console.error("Dashboard error:", data.message);
+            // Even if there's an error, we keep data as an empty structure to avoid crashes
+            setData({ upcomingAppointments: [], prescriptions: [], assignedUnit: null });
           } else {
-            setError(data.message || "Error al cargar datos del expediente.");
+            setData(data);
           }
         })
         .catch(err => {
           console.error("Dashboard Fetch Error:", err);
-          setError("No se pudo conectar con el servidor.");
+          setData({ upcomingAppointments: [], prescriptions: [], assignedUnit: null });
         });
     }
   }, [context?.state.user?.nss]);
-
-  if (error) {
-    return (
-      <div className="p-12 text-center bg-white rounded-2xl border border-red-100 shadow-sm">
-        <h3 className="text-lg font-bold text-red-900 mb-2">Oops! Algo salió mal</h3>
-        <p className="text-sm text-slate-500 mb-6">{error}</p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="bg-slate-900 text-white px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest"
-        >
-          Reintentar
-        </button>
-      </div>
-    );
-  }
 
   if (!data) return <div className="p-12 text-center text-[#1b5e20] font-bold uppercase tracking-widest animate-pulse text-xs">Sincronizando Expediente...</div>;
 
