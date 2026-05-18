@@ -45,32 +45,6 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Get Specialties for a specific unit
-app.get("/api/units/:id_unidad/specialties", async (req, res) => {
-  const { id_unidad } = req.params;
-  try {
-    const pool = await getDbConnection();
-    // Use VarChar for id_unidad to handle possible string IDs and be more flexible
-    // Also include specialties from Medico just in case Consultorio is missing some
-    const result = await pool.request()
-      .input('id_unidad', sql.VarChar, id_unidad)
-      .query(`
-        SELECT DISTINCT especialidad FROM Consultorio WHERE TRIM(CAST(id_unidad AS VARCHAR)) = TRIM(@id_unidad)
-        UNION
-        SELECT DISTINCT especialidad FROM Medico WHERE TRIM(CAST(id_unidad AS VARCHAR)) = TRIM(@id_unidad)
-      `);
-    
-    const specialties = result.recordset.map(r => {
-       const key = Object.keys(r).find(k => k.toLowerCase() === 'especialidad');
-       return key ? r[key] : null;
-    }).filter(s => s !== null && s !== '');
-
-    res.json(specialties);
-  } catch (err) {
-    res.status(500).json({ success: false, message: (err as Error).message });
-  }
-});
-
 // Get Available Slots
 app.get("/api/available-slots", async (req, res) => {
   const { id_unidad, fecha } = req.query;

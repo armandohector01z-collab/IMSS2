@@ -589,17 +589,12 @@ const ScheduleAppointment = () => {
                   <p className="text-xs text-slate-400 font-medium">NSS: {context?.state.user?.nss}</p>
                </div>
                <div className="space-y-4">
-                  <div className="flex justify-between items-start">
-                     <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Unidad</p>
-                        <p className="text-sm font-bold text-slate-900">{selectedUnit?.nombre || "Pendiente"}</p>
-                     </div>
-                     {selectedUnit && <span className="text-[#1b5e20] bg-green-50 p-1 rounded-lg"><PlusCircle className="w-4 h-4" /></span>}
-                  </div>
-                  <div>
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Motivo</p>
-                     <p className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{motivo || "Pendiente"}</p>
-                  </div>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Motivo</p>
+                        <p className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{motivo || "Pendiente"}</p>
+                      </div>
+                    </div>
                   <div>
                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Fecha y Hora</p>
                      <p className="text-sm font-bold text-slate-900">
