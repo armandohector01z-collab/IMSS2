@@ -124,7 +124,7 @@ const TopBar = () => {
               </p>
             </div>
             <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600">
-              {state.user.primer_nombre[0]}{state.user.primer_apellido[0]}
+              {(state.user.primer_nombre?.[0] || 'U')}{(state.user.primer_apellido?.[0] || '')}
             </div>
           </div>
         )}
@@ -422,22 +422,46 @@ const ScheduleAppointment = () => {
   React.useEffect(() => {
     fetch('/api/units')
       .then(res => res.json())
-      .then(setUnits);
+      .then(data => {
+        if (Array.isArray(data)) setUnits(data);
+        else console.error("Units is not an array:", data);
+      })
+      .catch(err => console.error("Error fetching units:", err));
   }, []);
 
   React.useEffect(() => {
-    if (selectedUnit) {
+    if (selectedUnit && selectedUnit.id_unidad) {
       fetch(`/api/units/${selectedUnit.id_unidad}/specialties`)
         .then(res => res.json())
-        .then(setSpecialties);
+        .then(data => {
+          if (Array.isArray(data)) setSpecialties(data);
+          else {
+            console.error("Specialties is not an array:", data);
+            setSpecialties([]);
+          }
+        })
+        .catch(err => {
+          console.error("Error fetching specialties:", err);
+          setSpecialties([]);
+        });
     }
   }, [selectedUnit]);
 
   React.useEffect(() => {
-    if (selectedUnit && selectedSpecialty && selectedDate) {
+    if (selectedUnit && selectedUnit.id_unidad && selectedSpecialty && selectedDate) {
       fetch(`/api/available-slots?id_unidad=${selectedUnit.id_unidad}&especialidad=${selectedSpecialty}&fecha=${selectedDate}`)
         .then(res => res.json())
-        .then(setAvailableSlots);
+        .then(data => {
+          if (Array.isArray(data)) setAvailableSlots(data);
+          else {
+             console.error("Slots is not an array:", data);
+             setAvailableSlots([]);
+          }
+        })
+        .catch(err => {
+          console.error("Error fetching slots:", err);
+          setAvailableSlots([]);
+        });
     }
   }, [selectedUnit, selectedSpecialty, selectedDate]);
 
@@ -506,7 +530,7 @@ const ScheduleAppointment = () => {
             <section className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
               <h2 className="text-xl font-bold text-slate-900 mb-6 tracking-tight">Seleccione su Unidad Médica</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {units.map(unit => (
+                {Array.isArray(units) && units.map(unit => (
                   <button 
                     key={unit.id_unidad}
                     onClick={() => setSelectedUnit(unit)}
@@ -536,7 +560,7 @@ const ScheduleAppointment = () => {
                       className="w-full h-14 px-4 border-none bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-green-100 font-bold text-sm text-slate-700"
                     >
                         <option value="">Seleccione una especialidad...</option>
-                        {specialties.map(spec => (
+                        {Array.isArray(specialties) && specialties.map(spec => (
                           <option key={spec} value={spec}>{spec}</option>
                         ))}
                     </select>
@@ -559,7 +583,7 @@ const ScheduleAppointment = () => {
           {step === 3 && (
             <section className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
               <h2 className="text-xl font-bold text-slate-900 mb-6 tracking-tight">Seleccione su Horario</h2>
-              {availableSlots.length > 0 ? (
+              {Array.isArray(availableSlots) && availableSlots.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                   {availableSlots.map((slot, idx) => (
                     <button

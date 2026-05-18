@@ -48,12 +48,22 @@ app.get("/api/health", (req, res) => {
 // Get Specialties for a specific unit
 app.get("/api/units/:id_unidad/specialties", async (req, res) => {
   const { id_unidad } = req.params;
+  const unitId = parseInt(id_unidad);
+  if (isNaN(unitId)) return res.status(400).json({ success: false, message: "Invalid unit ID" });
+
   try {
     const pool = await getDbConnection();
     const result = await pool.request()
-      .input('id_unidad', sql.Int, parseInt(id_unidad))
+      .input('id_unidad', sql.Int, unitId)
       .query('SELECT DISTINCT especialidad FROM Consultorio WHERE id_unidad = @id_unidad');
-    res.json(result.recordset.map(r => r.especialidad));
+    
+    // Normalize keys to lowercase for mapping
+    const specialties = result.recordset.map(r => {
+       const key = Object.keys(r).find(k => k.toLowerCase() === 'especialidad');
+       return key ? r[key] : null;
+    }).filter(s => s !== null);
+
+    res.json(specialties);
   } catch (err) {
     res.status(500).json({ success: false, message: (err as Error).message });
   }
@@ -62,16 +72,25 @@ app.get("/api/units/:id_unidad/specialties", async (req, res) => {
 // Get Available Slots
 app.get("/api/available-slots", async (req, res) => {
   const { id_unidad, especialidad, fecha } = req.query;
+  const unitId = parseInt(id_unidad as string);
+  if (isNaN(unitId) || !especialidad || !fecha) {
+    return res.status(400).json({ success: false, message: "Missing required parameters" });
+  }
+
   try {
     const pool = await getDbConnection();
     
     // 1. Get all consultorios for this specialty in this unit
     const consultoriosResult = await pool.request()
-      .input('id_unidad', sql.Int, parseInt(id_unidad as string))
+      .input('id_unidad', sql.Int, unitId)
       .input('especialidad', sql.VarChar, especialidad)
       .query('SELECT id_consultorio FROM Consultorio WHERE id_unidad = @id_unidad AND especialidad = @especialidad');
     
-    const consultorioIds = consultoriosResult.recordset.map(c => c.id_consultorio);
+    const consultorioIds = consultoriosResult.recordset.map(c => {
+       const key = Object.keys(c).find(k => k.toLowerCase() === 'id_consultorio');
+       return key ? c[key] : null;
+    }).filter(id => id !== null);
+
     if (consultorioIds.length === 0) return res.json([]);
 
     // 2. Get existing appointments for these consultorios on this date
@@ -90,6 +109,16 @@ app.get("/api/available-slots", async (req, res) => {
         AND fecha_hora BETWEEN @dateStart AND @dateEnd
       `);
 
+    // Normalize keys for appointments
+    const appointments = appointmentsResult.recordset.map(a => {
+       const fhKey = Object.keys(a).find(k => k.toLowerCase() === 'fecha_hora');
+       const icKey = Object.keys(a).find(k => k.toLowerCase() === 'id_consultorio');
+       return {
+         fecha_hora: fhKey ? a[fhKey] : null,
+         id_consultorio: icKey ? a[icKey] : null
+       };
+    }).filter(a => a.fecha_hora && a.id_consultorio);
+
     // 3. Generate theoretical slots (8:00 AM to 4:00 PM, every 30 mins)
     const availableSlots = [];
     const workStart = 8; // 8 AM
@@ -101,7 +130,7 @@ app.get("/api/available-slots", async (req, res) => {
         slotTime.setHours(hour, min, 0, 0);
         
         // Find which consultorios are free at this exact time
-        const busyConsultorios = appointmentsResult.recordset
+        const busyConsultorios = appointments
           .filter(a => new Date(a.fecha_hora).getTime() === slotTime.getTime())
           .map(a => a.id_consultorio);
         
@@ -152,7 +181,8 @@ app.post("/api/auth/login", async (req, res) => {
 app.get("/api/units", async (req, res) => {
   try {
     const pool = await getDbConnection();
-    const result = await pool.request().query('SELECT * FROM UnidadMedica');
+    // Use clear column names to ensure consistency
+    const result = await pool.request().query('SELECT id_unidad, Nombre, calle, colonia, tipo FROM UnidadMedica');
     res.json(result.recordset);
   } catch (err) {
     res.status(500).json({ success: false, message: (err as Error).message });
