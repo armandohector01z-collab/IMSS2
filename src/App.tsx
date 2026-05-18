@@ -55,7 +55,6 @@ const Sidebar = () => {
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
     { id: 'schedule', label: 'Citas', icon: CalendarDays },
     { id: 'recetas', label: 'Recetas', icon: FileText },
-    { id: 'expediente', label: 'Expediente', icon: UserCircle },
     { id: 'config', label: 'Configuración', icon: Settings },
   ];
 
@@ -307,49 +306,21 @@ const PatientDashboard = () => {
           </div>
           
           <div className="flex-1 flex flex-col gap-6 pl-0 md:pl-8 border-l border-none md:border-slate-50">
-             <div className="grid grid-cols-3 gap-4">
+             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-50 p-4 rounded-xl">
                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Consultas 2024</p>
                     <p className="text-xl font-bold text-slate-900">04</p>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl">
                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Recetas Activas</p>
-                    <p className="text-xl font-bold text-slate-900">01</p>
-                </div>
-                <div className="bg-slate-50 p-4 rounded-xl">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Unidad</p>
-                    <p className="text-xl font-bold text-[#1b5e20] uppercase">{data.assignedUnit?.Nombre || "--"}</p>
+                    <p className="text-xl font-bold text-slate-900">{(data.prescriptions?.length || 0).toString().padStart(2, '0')}</p>
                 </div>
              </div>
              <div className="flex-1 bg-green-50 rounded-2xl p-6 flex flex-col justify-center items-start">
-                <h3 className="text-sm font-bold text-[#1b5e20] mb-2">Asistencia Virtual</h3>
-                <p className="text-[11px] text-[#1b5e20]/70 font-medium leading-relaxed mb-4">Resuelve dudas sobre tus trámites y vigencia de derechos sin salir de casa.</p>
-                <button className="bg-white text-[#1b5e20] px-6 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest shadow-sm hover:bg-green-50 transition-all">Iniciar Chat</button>
+                <h3 className="text-sm font-bold text-[#1b5e20] mb-2">Unidad Asignada</h3>
+                <p className="text-xl font-bold text-[#1b5e20] uppercase">{data.assignedUnit?.Nombre || "--"}</p>
+                <p className="text-[11px] text-[#1b5e20]/70 font-medium leading-relaxed mt-2">{data.assignedUnit?.calle}, {data.assignedUnit?.colonia}</p>
              </div>
-          </div>
-        </section>
-
-        {/* PreventIMSS Card */}
-        <section className="md:col-span-4 bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-          <p className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-widest mb-6">Seguimiento Preventivo</p>
-          <div className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-2xl mb-8">
-             <div className="relative w-24 h-24 flex items-center justify-center">
-                <svg className="w-full h-full transform -rotate-90">
-                    <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-200" />
-                    <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray="251.2" strokeDashoffset={251.2 * (1 - 0.75)} className="text-[#1b5e20] transition-all duration-1000" />
-                </svg>
-                <span className="absolute text-xl font-bold text-slate-900">75%</span>
-             </div>
-             <p className="text-[10px] font-bold text-slate-400 mt-4 uppercase">Estado General</p>
-          </div>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-800">Check-up General</span>
-                <span className="px-2 py-0.5 bg-green-50 text-[#1b5e20] rounded text-[9px] font-bold uppercase tracking-widest">Finalizado</span>
-            </div>
-            <button className="w-full mt-4 bg-[#1b5e20] text-white py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-green-800 transition-all shadow-sm">
-              Ver Plan Preventivo
-            </button>
           </div>
         </section>
 
@@ -684,6 +655,12 @@ const ScheduleAppointment = () => {
 // Doctor Consultation Page (The one from the image)
 const DoctorConsultation = () => {
   const [appointments, setAppointments] = React.useState<any[]>([]);
+  const [diagnosis, setDiagnosis] = React.useState("");
+  const [prescribedMedicines, setPrescribedMedicines] = React.useState<any[]>([]);
+  const [medQuery, setMedQuery] = React.useState("");
+  const [medResults, setMedResults] = React.useState<any[]>([]);
+  const [showMedResults, setShowMedResults] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
   const context = React.useContext(AppContext);
 
   React.useEffect(() => {
@@ -695,7 +672,74 @@ const DoctorConsultation = () => {
     }
   }, [context?.state.user?.Matricula]);
 
+  React.useEffect(() => {
+    if (medQuery.length > 2) {
+      fetch(`/api/medicines?q=${medQuery}`)
+        .then(res => res.json())
+        .then(setMedResults);
+    } else {
+      setMedResults([]);
+    }
+  }, [medQuery]);
+
   const selectedPatient = appointments[0] || null;
+
+  const addMedicine = (med: any) => {
+    setPrescribedMedicines([...prescribedMedicines, { 
+      ...med, 
+      dosis: '', 
+      frecuencia: '', 
+      duracion: '' 
+    }]);
+    setMedQuery("");
+    setShowMedResults(false);
+  };
+
+  const removeMedicine = (idx: number) => {
+    setPrescribedMedicines(prescribedMedicines.filter((_, i) => i !== idx));
+  };
+
+  const updateMedicineField = (idx: number, field: string, value: string) => {
+    const newMeds = [...prescribedMedicines];
+    newMeds[idx][field] = value;
+    setPrescribedMedicines(newMeds);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPatient || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/doctor/prescribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nss: selectedPatient.NSS,
+          matricula: context?.state.user?.Matricula,
+          id_consultorio: selectedPatient.id_consultorio,
+          fecha_hora: selectedPatient.fecha_hora,
+          diagnosis,
+          medicines: prescribedMedicines.map(m => ({
+            id_medicamento: m.id_medicamento,
+            dosis: m.dosis || '1 tableta',
+            frecuencia: m.frecuencia || 'Cada 8 hrs',
+            duracion: m.duracion || '7 días'
+          }))
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Consulta y receta guardadas correctamente.");
+        setAppointments(appointments.slice(1));
+        setDiagnosis("");
+        setPrescribedMedicines([]);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -712,7 +756,7 @@ const DoctorConsultation = () => {
             <span className="bg-green-50 text-[#1b5e20] px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Hoy</span>
           </div>
           <div className="divide-y divide-slate-50">
-            {appointments.map((apt, idx) => (
+            {appointments.length > 0 ? appointments.map((apt, idx) => (
               <div 
                 key={idx} 
                 className={cn(
@@ -728,7 +772,9 @@ const DoctorConsultation = () => {
                 <p className="font-bold text-slate-900">{apt.primer_nombre} {apt.primer_apellido}</p>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">NSS: {apt.NSS}</p>
               </div>
-            ))}
+            )) : (
+              <div className="p-8 text-center text-slate-300 italic text-sm">No hay citas pendientes.</div>
+            )}
           </div>
           <button className="w-full py-4 text-[#1b5e20] font-bold uppercase text-[10px] tracking-widest hover:bg-slate-50 transition-all border-t border-slate-50">
             Ver Calendario Completo
@@ -742,7 +788,7 @@ const DoctorConsultation = () => {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-10">
                 <div className="flex items-center gap-6">
                   <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-600 text-xl font-bold">
-                    {selectedPatient.primer_nombre[0]}{selectedPatient.primer_apellido[0]}
+                    {(selectedPatient.primer_nombre?.[0] || 'P')}{(selectedPatient.primer_apellido?.[0] || '')}
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{selectedPatient.primer_nombre} {selectedPatient.primer_apellido}</h2>
@@ -773,21 +819,57 @@ const DoctorConsultation = () => {
                 </div>
               </div>
 
-              <form className="space-y-8">
+              <form onSubmit={handleSubmit} className="space-y-8">
                 <div>
                   <label className="block text-[10px] font-bold text-[#1b5e20] uppercase tracking-widest mb-4">Nota Médica / Diagnóstico</label>
                   <textarea 
+                    value={diagnosis}
+                    onChange={(e) => setDiagnosis(e.target.value)}
                     className="w-full bg-slate-50 border-none rounded-2xl p-6 min-h-[160px] focus:ring-2 focus:ring-green-100 outline-none transition-all text-sm font-medium placeholder:text-slate-300"
                     placeholder="Redacte el diagnóstico clínico detallado..."
+                    required
                   ></textarea>
                 </div>
 
                 <div>
                    <div className="flex justify-between items-center mb-4">
                       <label className="text-[10px] font-bold text-[#1b5e20] uppercase tracking-widest">Tratamiento Recomendado</label>
-                      <button type="button" className="text-[#1b5e20] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 hover:underline">
-                        <PlusCircle className="w-4 h-4" /> Añadir Medicamento
-                      </button>
+                      <div className="relative">
+                        <button 
+                          type="button" 
+                          onClick={() => setShowMedResults(!showMedResults)}
+                          className="text-[#1b5e20] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 hover:underline"
+                        >
+                          <PlusCircle className="w-4 h-4" /> Añadir Medicamento
+                        </button>
+                        {showMedResults && (
+                          <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-4">
+                            <input 
+                              type="text"
+                              value={medQuery}
+                              onChange={(e) => setMedQuery(e.target.value)}
+                              placeholder="Buscar medicamento..."
+                              className="w-full px-4 py-2 bg-slate-50 rounded-lg text-xs outline-none focus:ring-2 focus:ring-green-100"
+                              autoFocus
+                            />
+                            <div className="mt-2 max-h-48 overflow-y-auto text-left">
+                              {medResults.map(m => (
+                                <button
+                                  key={m.id_medicamento}
+                                  type="button"
+                                  onClick={() => addMedicine(m)}
+                                  className="w-full text-left px-4 py-2 hover:bg-slate-50 rounded text-xs font-bold text-slate-700"
+                                >
+                                  {m.nombre}
+                                </button>
+                              ))}
+                              {medQuery.length > 2 && medResults.length === 0 && (
+                                <p className="p-4 text-center text-xs text-slate-400 italic">No se encontraron resultados.</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                    </div>
                    <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
                       <table className="w-full text-left">
@@ -796,22 +878,50 @@ const DoctorConsultation = () => {
                                <th className="py-4 px-6">Medicamento</th>
                                <th className="py-4 px-6">Dosis</th>
                                <th className="py-4 px-6">Frecuencia</th>
+                               <th className="py-4 px-6">Duración</th>
                                <th className="py-4 px-6"></th>
                             </tr>
                          </thead>
                          <tbody className="text-sm text-slate-600 font-medium divide-y divide-slate-50">
-                            <tr className="hover:bg-slate-50 transition-colors">
-                               <td className="py-6 px-6 font-bold text-slate-900">Paracetamol 500mg</td>
-                               <td className="py-6 px-6">1 Tableta</td>
-                               <td className="py-6 px-6">Cada 8 hrs / 3 días</td>
-                               <td className="py-6 px-6 text-right"><button className="text-slate-300 hover:text-red-500 transition-all"><Trash2 className="w-4 h-4" /></button></td>
-                            </tr>
-                            <tr className="bg-white">
-                               <td className="py-6 px-6"><input className="w-full bg-transparent border-none p-0 outline-none placeholder:text-slate-200 text-xs font-medium" placeholder="Especifique medicina..." /></td>
-                               <td className="py-6 px-6"><input className="w-full bg-transparent border-none p-0 outline-none placeholder:text-slate-200 text-xs font-medium" placeholder="Cantidad..." /></td>
-                               <td className="py-6 px-6"><input className="w-full bg-transparent border-none p-0 outline-none placeholder:text-slate-200 text-xs font-medium" placeholder="Horario..." /></td>
-                               <td className="py-6 px-6"></td>
-                            </tr>
+                            {prescribedMedicines.map((m, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                <td className="py-6 px-6 font-bold text-slate-900">{m.nombre}</td>
+                                <td className="py-6 px-6">
+                                  <input 
+                                    value={m.dosis}
+                                    onChange={(e) => updateMedicineField(idx, 'dosis', e.target.value)}
+                                    className="w-full bg-transparent border-none p-0 outline-none text-xs font-medium" 
+                                    placeholder="e.g. 1 tableta" 
+                                  />
+                                </td>
+                                <td className="py-6 px-6">
+                                  <input 
+                                    value={m.frecuencia}
+                                    onChange={(e) => updateMedicineField(idx, 'frecuencia', e.target.value)}
+                                    className="w-full bg-transparent border-none p-0 outline-none text-xs font-medium" 
+                                    placeholder="e.g. Cada 8 hrs" 
+                                  />
+                                </td>
+                                <td className="py-6 px-6">
+                                  <input 
+                                    value={m.duracion}
+                                    onChange={(e) => updateMedicineField(idx, 'duracion', e.target.value)}
+                                    className="w-full bg-transparent border-none p-0 outline-none text-xs font-medium" 
+                                    placeholder="e.g. 7 días" 
+                                  />
+                                </td>
+                                <td className="py-6 px-6 text-right">
+                                  <button type="button" onClick={() => removeMedicine(idx)} className="text-slate-300 hover:text-red-500 transition-all">
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                            {prescribedMedicines.length === 0 && (
+                              <tr>
+                                <td colSpan={5} className="py-8 text-center text-slate-300 italic text-xs">No hay medicamentos añadidos.</td>
+                              </tr>
+                            )}
                          </tbody>
                       </table>
                    </div>
@@ -821,8 +931,12 @@ const DoctorConsultation = () => {
                   <button type="button" className="px-8 py-3 text-slate-400 font-bold uppercase text-[10px] tracking-widest hover:text-slate-800 transition-all">
                     Borrador
                   </button>
-                  <button type="submit" className="px-10 py-3 bg-[#1b5e20] text-white font-bold uppercase text-[10px] tracking-widest rounded-xl shadow-sm hover:bg-green-800 transition-all">
-                    Firmar y Finalizar
+                  <button 
+                    type="submit" 
+                    disabled={submitting || !diagnosis}
+                    className="px-10 py-3 bg-[#1b5e20] text-white font-bold uppercase text-[10px] tracking-widest rounded-xl shadow-sm hover:bg-green-800 disabled:opacity-50 transition-all"
+                  >
+                    {submitting ? "Guardando..." : "Firmar y Finalizar"}
                   </button>
                 </div>
               </form>

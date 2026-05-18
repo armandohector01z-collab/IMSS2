@@ -249,6 +249,69 @@ app.get("/api/patient/:nss/dashboard", async (req, res) => {
   }
 });
 
+// Get Medicines for search
+app.get("/api/medicines", async (req, res) => {
+  const { q } = req.query;
+  try {
+    const pool = await getDbConnection();
+    const result = await pool.request()
+      .input('query', sql.VarChar, `%${q}%`)
+      .query('SELECT TOP 10 * FROM Medicamento WHERE nombre LIKE @query');
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).json({ success: false, message: (err as Error).message });
+  }
+});
+
+// Create Prescription and Consultation
+app.post("/api/doctor/prescribe", async (req, res) => {
+  const { nss, matricula, id_consultorio, fecha_hora, diagnosis, medicines } = req.body;
+  // medicines: [{id_medicamento, dosis, frecuencia, duracion}]
+  
+  try {
+    const pool = await getDbConnection();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      // 1. Create Receta
+      const recetaResult = await transaction.request()
+        .input('fecha', sql.DateTime2, new Date())
+        .query('INSERT INTO Receta (fecha) OUTPUT INSERTED.id_receta VALUES (@fecha)');
+      
+      const id_receta = recetaResult.recordset[0].id_receta;
+
+      // 2. Add Medicines (Tiene)
+      for (const med of medicines) {
+        await transaction.request()
+          .input('id_receta', sql.Int, id_receta)
+          .input('id_med', sql.Int, med.id_medicamento)
+          .input('dosis', sql.VarChar(50), med.dosis)
+          .input('frecuencia', sql.VarChar(50), med.frecuencia)
+          .input('duracion', sql.VarChar(50), med.duracion || '7 días')
+          .query('INSERT INTO Tiene (id_receta, id_medicamento, dosis, frecuencia, duracion) VALUES (@id_receta, @id_med, @dosis, @frecuencia, @duracion)');
+      }
+
+      // 3. Create Consulta linked to Cita and Receta
+      await transaction.request()
+        .input('id_consultorio', sql.Int, id_consultorio)
+        .input('fecha_hora', sql.DateTime2, new Date(fecha_hora))
+        .input('id_receta', sql.Int, id_receta)
+        .input('matricula', sql.Int, matricula)
+        // Add diagnosis if there's a field for it, otherwise we're just linking
+        .query('INSERT INTO Consulta (id_consultorio, fecha_hora, id_receta, Matricula) VALUES (@id_consultorio, @fecha_hora, @id_receta, @matricula)');
+
+      await transaction.commit();
+      res.json({ success: true, id_receta });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: (err as Error).message });
+  }
+});
+
 // Create Appointment
 app.post("/api/appointments", async (req, res) => {
   const { fecha_hora, id_consultorio, NSS, id_unidad, motivo } = req.body;
